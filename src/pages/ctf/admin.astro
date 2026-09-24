@@ -1,0 +1,318 @@
+---
+import CtfLayout from '../../layouts/CtfLayout.astro';
+import { CHALLENGES } from '../../../ctf-lib/content.js';
+const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
+---
+
+<CtfLayout title="Admin · NMT SOC Challenge" wide>
+	<div class="topbar">
+		<span class="brand"><span class="dot"></span>NMT SOC Challenge · Presenter console</span>
+		<span>
+			<a href="/ctf/leaderboard" target="_blank" rel="noopener">Open leaderboard ↗</a>
+			<button id="logout" class="btn ghost sm hidden" type="button">Log out</button>
+		</span>
+	</div>
+
+	<section id="login" class="card login hidden">
+		<h1>Presenter login</h1>
+		<form id="login-form">
+			<div class="field">
+				<label for="pw">Admin password</label>
+				<input id="pw" type="password" autocomplete="current-password" required />
+			</div>
+			<div id="login-err" class="alert bad hidden"></div>
+			<button class="btn block" type="submit">Log in</button>
+		</form>
+	</section>
+
+	<section id="console" class="hidden">
+		<div class="row">
+			<div class="card state">
+				<p class="eyebrow">Event state</p>
+				<div class="pills" id="pills"></div>
+				<div class="clock mono" id="clock">--:--</div>
+				<div class="small muted" id="clock-sub">Not started</div>
+			</div>
+
+			<div class="card controls">
+				<p class="eyebrow">Controls</p>
+				<div class="ctl">
+					<label class="mins">Minutes <input id="mins" type="number" min="1" max="180" value="20" /></label>
+					<button class="btn" data-act="start">▶ Start challenge</button>
+					<button class="btn ghost sm" data-act="extend" data-min="1">+1 min</button>
+					<button class="btn ghost sm" data-act="extend" data-min="-1">−1 min</button>
+				</div>
+				<div class="ctl">
+					<button class="btn warn" data-act="freeze">❄ Freeze leaderboard</button>
+					<button class="btn ghost sm" data-act="unfreeze">Unfreeze</button>
+				</div>
+				<div class="ctl">
+					<button class="btn danger" data-act="close">■ Close submissions</button>
+					<button class="btn ghost sm" data-act="reopen">Reopen submissions</button>
+				</div>
+				<div class="ctl">
+					<button class="btn" data-act="reveal">🏆 Reveal final results</button>
+					<button class="btn ghost sm" data-act="unreveal">Hide results</button>
+				</div>
+				<div class="ctl">
+					<a class="btn ghost sm" href="/api/ctf/admin/export?type=participants">⇩ Export CSV (participants)</a>
+					<a class="btn ghost sm" href="/api/ctf/admin/export?type=submissions">⇩ Export CSV (all submissions)</a>
+				</div>
+				<div class="ctl danger-zone">
+					<button class="btn danger sm" data-act="reset_scores">Reset scores (keep registrations)</button>
+					<button class="btn danger sm" data-act="reset_all">RESET EVENT (delete everything)</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="tiles">
+			<div class="tile"><span class="k">Analysts</span><span class="v mono" id="s-an">0</span></div>
+			<div class="tile"><span class="k">Submissions</span><span class="v mono" id="s-sub">0</span></div>
+			<div class="tile"><span class="k">Solves</span><span class="v mono" id="s-sol">0</span></div>
+			<div class="tile"><span class="k">Case solves</span><span class="v mono small-v" id="s-prog"></span></div>
+		</div>
+
+		<div class="card">
+			<div class="tbl-head">
+				<p class="eyebrow">Participants (live, includes hidden)</p>
+				<input id="filter" placeholder="Filter by name, email or handle" />
+			</div>
+			<div class="tbl-wrap">
+				<table>
+					<thead>
+						<tr><th>#</th><th>Full name</th><th>Email</th><th>Handle</th><th class="num">Score</th><th class="num">Solved</th><th class="num">Attempts</th><th>Score reached</th><th>Last activity</th></tr>
+					</thead>
+					<tbody id="people"></tbody>
+				</table>
+			</div>
+		</div>
+	</section>
+
+	<dialog id="detail">
+		<div class="dlg">
+			<div class="dlg-head">
+				<h2 id="d-title">Participant</h2>
+				<button class="btn ghost sm" id="d-close" type="button">Close</button>
+			</div>
+			<div id="d-body"></div>
+			<div class="dlg-actions">
+				<div class="ctl">
+					<input id="d-handle" class="mono" maxlength="24" placeholder="New handle" />
+					<button class="btn sm" id="d-rename" type="button">Rename handle</button>
+				</div>
+				<div class="ctl">
+					<button class="btn ghost sm" id="d-hide" type="button">Hide from public leaderboard</button>
+					<button class="btn ghost sm" id="d-resume" type="button">Generate re-entry link</button>
+					<button class="btn danger sm" id="d-delete" type="button">Delete participant</button>
+				</div>
+				<div id="d-link" class="alert info hidden mono"></div>
+			</div>
+		</div>
+	</dialog>
+</CtfLayout>
+
+<script define:vars={{ titles }}>
+	window.__CTF_TITLES = titles;
+</script>
+
+<script>
+	import { api, syncClock, remainingMs, fmtClock, toast, esc } from '../../scripts/ctf-client.js';
+	const TITLES: Record<string, string> = (window as any).__CTF_TITLES;
+	const $ = (id: string) => document.getElementById(id)!;
+	let state: any = null;
+	let people: any[] = [];
+	let current: any = null;
+	let timer: any;
+
+	const fmtT = (iso: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+
+	async function boot() {
+		const r = await api('admin/login');
+		if (r.ok && r.admin) showConsole();
+		else $('login').classList.remove('hidden');
+	}
+
+	$('login-form').addEventListener('submit', async (e) => {
+		e.preventDefault();
+		const r = await api('admin/login', { method: 'POST', body: { password: ($('pw') as HTMLInputElement).value } });
+		if (r.ok) { $('login').classList.add('hidden'); showConsole(); }
+		else { $('login-err').textContent = r.error; $('login-err').classList.remove('hidden'); }
+	});
+	$('logout').addEventListener('click', async () => { await api('admin/login', { method: 'DELETE' }); location.reload(); });
+
+	function showConsole() {
+		$('console').classList.remove('hidden');
+		$('logout').classList.remove('hidden');
+		load();
+		clearInterval(timer);
+		timer = setInterval(load, 3000);
+	}
+
+	async function load() {
+		const r = await api('admin/overview');
+		if (r.status === 401) { clearInterval(timer); $('console').classList.add('hidden'); $('login').classList.remove('hidden'); return; }
+		if (!r.ok) return;
+		state = r.state;
+		syncClock(state.serverNow);
+		const pills = [
+			state.started ? (state.isOpen ? ['ok', 'Submissions OPEN'] : ['bad', 'Submissions CLOSED']) : ['', 'Not started (closed)'],
+			state.frozen ? ['warn', 'Public board FROZEN'] : ['live', 'Public board live'],
+			state.final ? ['ok', 'Final results SHOWN'] : ['', 'Results hidden'],
+		];
+		$('pills').innerHTML = pills.map(([c, t]) => `<span class="pill ${c}">${t}</span>`).join('');
+		$('s-an').textContent = r.stats.analysts;
+		$('s-sub').textContent = r.stats.submissions;
+		$('s-sol').textContent = r.stats.solves;
+		$('s-prog').innerHTML = r.progress.map((p: any) => `${esc(p.title)}: <b>${p.solved}</b>`).join('<br>');
+		people = r.participants;
+		renderPeople();
+	}
+
+	function renderPeople() {
+		const q = ($('filter') as HTMLInputElement).value.trim().toLowerCase();
+		const list = q ? people.filter((p) => (p.full_name + ' ' + p.email + ' ' + p.handle).toLowerCase().includes(q)) : people;
+		$('people').innerHTML = list.length
+			? list
+					.map(
+						(p) => `<tr data-id="${p.id}" class="${p.is_hidden ? 'hid' : ''}"><td class="mono">${p.rank ?? '—'}</td><td>${esc(p.full_name)}</td><td class="mono sm">${esc(p.email)}</td><td class="mono"><b>${esc(p.handle)}</b>${p.is_hidden ? ' <span class="pill bad">hidden</span>' : ''}</td><td class="num mono">${p.score}</td><td class="num mono">${p.solved}/4</td><td class="num mono">${p.attempts}</td><td class="mono sm">${fmtT(p.last_solve_at)}</td><td class="mono sm">${fmtT(p.last_activity_at)}</td></tr>`
+					)
+					.join('')
+			: '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No participants yet.</td></tr>';
+	}
+	$('filter').addEventListener('input', renderPeople);
+	$('people').addEventListener('click', (e) => {
+		const tr = (e.target as HTMLElement).closest('tr[data-id]') as HTMLElement | null;
+		if (tr) openDetail(Number(tr.dataset.id));
+	});
+
+	async function act(action: string, extra: any = {}) {
+		const r = await api('admin/action', { method: 'POST', body: { action, ...extra } });
+		if (r.ok) { toast('Done: ' + action.replace('_', ' ')); load(); }
+		else toast(r.error || 'Action failed');
+		return r;
+	}
+
+	document.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) =>
+		b.addEventListener('click', async () => {
+			const a = b.dataset.act!;
+			if (a === 'start') {
+				if (state?.started && !confirm('The challenge already started. Restart the timer from now?')) return;
+				return act('start', { minutes: ($('mins') as HTMLInputElement).value });
+			}
+			if (a === 'extend') return act('extend', { minutes: b.dataset.min });
+			if (a === 'close' && !confirm('Close submissions now?')) return;
+			if (a === 'reveal' && !confirm('Reveal final results on the public leaderboard?')) return;
+			if (a === 'reset_scores' || a === 'reset_all') {
+				const msg = a === 'reset_all' ? 'This deletes ALL participants, submissions and scores.' : 'This deletes all submissions and scores but keeps registrations.';
+				const c = prompt(msg + '\nType RESET to confirm.');
+				if (c !== 'RESET') return;
+				return act(a, { confirm: 'RESET' });
+			}
+			act(a);
+		})
+	);
+
+	setInterval(() => {
+		if (!state) return;
+		const ms = state.started ? remainingMs(state.endsAt) : null;
+		$('clock').textContent = fmtClock(ms);
+		$('clock-sub').textContent = state.started ? `Started ${fmtT(state.startedAt)} · ends ${fmtT(state.endsAt)}${ms != null && ms <= 0 ? ' · TIME UP (close manually)' : ''}` : 'Not started';
+	}, 250);
+
+	// ----- participant detail -----
+	const dlg = $('detail') as HTMLDialogElement;
+	$('d-close').addEventListener('click', () => dlg.close());
+
+	async function openDetail(id: number) {
+		const r = await api('admin/participant?id=' + id);
+		if (!r.ok) return toast(r.error);
+		current = r;
+		const p = r.participant;
+		$('d-title').textContent = `${p.full_name} — ${p.handle}`;
+		($('d-handle') as HTMLInputElement).value = p.handle;
+		$('d-hide').textContent = p.is_hidden ? 'Show on public leaderboard' : 'Hide from public leaderboard';
+		$('d-link').classList.add('hidden');
+		const solves = r.solves.map((s: any) => `<li><b>${esc(TITLES[s.challenge_id])}</b> +${s.points} at <span class="mono">${fmtT(s.solved_at)}</span></li>`).join('') || '<li class="muted">None</li>';
+		const subs = r.submissions
+			.map((s: any) => `<tr><td class="mono sm">${fmtT(s.created_at)}</td><td>${esc(TITLES[s.challenge_id])}</td><td class="mono">${esc(Object.entries(s.answers).map(([k, v]) => k + '=' + v).join(' '))}</td><td>${s.is_correct ? '<span class="pill ok">correct</span>' : '<span class="pill bad">incorrect</span>'}</td><td class="num mono">${s.points_awarded}</td></tr>`)
+			.join('');
+		$('d-body').innerHTML = `
+			<div class="dgrid">
+				<div><span class="k">Email</span><span class="mono">${esc(p.email)}</span></div>
+				<div><span class="k">Registered</span><span class="mono">${new Date(p.created_at).toLocaleString()}</span></div>
+				<div><span class="k">Last activity</span><span class="mono">${new Date(p.last_activity_at).toLocaleString()}</span></div>
+				<div><span class="k">Total score</span><span class="mono"><b>${r.score}</b> / 100</span></div>
+			</div>
+			<p class="eyebrow" style="margin-top:16px">Solves</p><ul class="solves">${solves}</ul>
+			<p class="eyebrow" style="margin-top:16px">Attempts (${r.submissions.length})</p>
+			<div class="tbl-wrap"><table><thead><tr><th>Time</th><th>Case</th><th>Answers</th><th>Result</th><th class="num">Pts</th></tr></thead><tbody>${subs || '<tr><td colspan="5" class="muted">No attempts</td></tr>'}</tbody></table></div>`;
+		if (!dlg.open) dlg.showModal();
+	}
+	$('d-rename').addEventListener('click', async () => {
+		const r = await act('rename', { id: current.participant.id, handle: ($('d-handle') as HTMLInputElement).value.trim() });
+		if (r.ok) openDetail(current.participant.id);
+	});
+	$('d-hide').addEventListener('click', async () => {
+		const r = await act(current.participant.is_hidden ? 'unhide' : 'hide', { id: current.participant.id });
+		if (r.ok) openDetail(current.participant.id);
+	});
+	$('d-resume').addEventListener('click', async () => {
+		const r = await api('admin/action', { method: 'POST', body: { action: 'resume_link', id: current.participant.id } });
+		if (!r.ok) return toast(r.error);
+		const el = $('d-link');
+		el.textContent = r.url;
+		el.classList.remove('hidden');
+		try { await navigator.clipboard.writeText(r.url); toast('Re-entry link copied. It logs the student in once; their old device is signed out.'); } catch {}
+	});
+	$('d-delete').addEventListener('click', async () => {
+		if (prompt('Delete this participant and all their attempts? Type DELETE') !== 'DELETE') return;
+		const r = await act('delete', { id: current.participant.id, confirm: 'DELETE' });
+		if (r.ok) dlg.close();
+	});
+
+	boot();
+</script>
+
+<style is:global>
+	.login { max-width: 420px; margin: 40px auto; }
+	.login h1 { font-size: 26px; margin-bottom: 18px; }
+	.topbar a { margin-right: 12px; }
+	.row { display: grid; grid-template-columns: 320px 1fr; gap: 16px; margin-bottom: 16px; }
+	.pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+	.clock { font-size: 56px; font-weight: 800; color: var(--cyan); }
+	.small { font-size: 13px; }
+	.controls .ctl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+	.mins { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+	.mins input, #filter, #d-handle { background: #06101d; border: 1px solid var(--line-2); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 15px; }
+	.mins input { width: 72px; }
+	.danger-zone { border-top: 1px dashed var(--line-2); padding-top: 12px; }
+	.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+	.tile { background: linear-gradient(180deg, var(--panel), var(--bg-2)); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 4px; }
+	.tile .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+	.tile .v { font-size: 34px; font-weight: 800; }
+	.tile .small-v { font-size: 13px; font-weight: 400; line-height: 1.6; }
+	.tbl-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+	#filter { min-width: 280px; }
+	.tbl-wrap { overflow-x: auto; }
+	table { width: 100%; border-collapse: collapse; font-size: 14px; }
+	th { text-align: left; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+	td { padding: 8px 10px; border-bottom: 1px solid rgba(31, 58, 92, 0.6); }
+	tbody#people tr { cursor: pointer; }
+	tbody#people tr:hover { background: var(--cyan-dim); }
+	tr.hid { opacity: 0.6; }
+	.num { text-align: right; }
+	.sm { font-size: 12px; }
+	dialog { background: var(--bg-2); color: var(--text); border: 1px solid var(--line-2); border-radius: var(--r); width: min(960px, 96vw); max-height: 90vh; padding: 0; }
+	dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+	.dlg { padding: 20px; }
+	.dlg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+	.dlg-head h2 { font-size: 22px; }
+	.dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+	.dgrid div { display: grid; gap: 2px; }
+	.dgrid .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+	.solves { margin: 6px 0 0; padding-left: 20px; }
+	.dlg-actions { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 8px; }
+	.dlg-actions .ctl { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+	#d-link { margin-top: 12px; word-break: break-all; font-size: 13px; }
+	@media (max-width: 900px) { .row { grid-template-columns: 1fr; } .tiles { grid-template-columns: 1fr 1fr; } }
+</style>

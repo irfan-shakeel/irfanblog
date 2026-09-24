@@ -1,0 +1,16 @@
+# Cloudflare Pages config for irfanshakeel.com.
+# The existing Astro site stays a static build (dist/). The /ctf challenge adds
+# Pages Functions (functions/api/ctf/*) backed by the D1 database below.
+name = "irfanblog"
+pages_build_output_dir = "./dist"
+compatibility_date = "2026-05-29"
+
+[[d1_databases]]
+binding = "CTF_DB"
+database_name = "nmt-ctf"
+database_id = "95e6bf94-c3e2-43eb-9846-1831b030da95"
+migrations_dir = "migrations"
+
+# Secrets (set with `wrangler pages secret put`, never committed):
+#   CTF_ADMIN_PASSWORD, CTF_SESSION_SECRET, CTF_ANSWER_KEY,
+#   CTF_FLAG_IMPOSTOR, CTF_FLAG_BOX, CTF_FLAG_GREEN, CTF_FLAG_DLP

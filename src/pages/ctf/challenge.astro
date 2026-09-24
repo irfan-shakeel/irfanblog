@@ -1,0 +1,346 @@
+---
+import CtfLayout from '../../layouts/CtfLayout.astro';
+import { CHALLENGES, EVENT } from '../../../ctf-lib/content.js';
+
+const md = (s: string) =>
+	s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+---
+
+<CtfLayout title="Cases · NMT SOC Challenge">
+	<div class="topbar">
+		<a class="brand" href="/ctf" style="text-decoration:none"><span class="dot"></span>NMT SOC Challenge</a>
+		<span class="pill live mono" id="who">…</span>
+	</div>
+
+	<section class="hud card" aria-label="Your status">
+		<div><span class="k">Score</span><span class="v mono"><b id="score">0</b><i>/ {EVENT.maxScore}</i></span></div>
+		<div><span class="k">Solved</span><span class="v mono"><b id="solved">0</b><i>/ 4</i></span></div>
+		<div><span class="k">Time</span><span class="v mono"><b id="timer">--:--</b></span></div>
+	</section>
+
+	<div id="banner-wait" class="alert info hidden"><b>Standing by.</b> The cases unlock when the instructor starts the challenge. This page updates automatically.</div>
+	<div id="banner-closed" class="alert bad hidden"><b>Submissions are closed.</b> Stay on this page for the final reveal.</div>
+	<div id="banner-noreg" class="alert bad hidden">You're not registered on this device. <a href="/ctf/register">Register here</a>.</div>
+
+	<section id="finish" class="card finish hidden">
+		<p class="eyebrow">Mission complete</p>
+		<div class="big mono">100 / 100</div>
+		<h2>ALL FOUR CASES SOLVED</h2>
+		<p class="lead">You made it through the trust boundary.</p>
+		<p class="muted">Stay on this page. Final rankings will be revealed shortly.</p>
+		<a class="btn ghost sm" href="/ctf/leaderboard" target="_blank" rel="noopener">View leaderboard</a>
+	</section>
+
+	<div class="cases">
+		{
+			CHALLENGES.map((c) => (
+				<article class="case locked" id={`case-${c.id}`} data-id={c.id} data-points={c.points}>
+					<button class="case-head" type="button" aria-expanded="false" aria-controls={`body-${c.id}`}>
+						<span class="num mono">{c.num}</span>
+						<span class="ttl">
+							<span class="name">{c.title}</span>
+							<span class="sub mono">
+								{c.stage} · {c.points} pts
+							</span>
+						</span>
+						<span class="status pill">Not solved</span>
+					</button>
+
+					<div class="case-body hidden" id={`body-${c.id}`}>
+						<div class="captured hidden">
+							<div class="cap-title">FLAG CAPTURED ✓</div>
+							<div class="flag cap-flag" />
+							<div class="cap-pts mono" />
+							<p class="cap-take" />
+						</div>
+
+						<div class="brief">
+							{c.brief.map((line) => (line.startsWith('@file ') ? <div class="file">{line.slice(6)}</div> : <p set:html={md(line)} />))}
+						</div>
+						{c.policy && (
+							<div class="policy">
+								<span class="mono">POLICY</span>
+								{c.policy}
+							</div>
+						)}
+						{c.safetyNote && <p class="safety">{c.safetyNote}</p>}
+
+						<div class="actions">
+							{c.downloads.map((d) => (
+								<a class="btn ghost" href={d.href} download>
+									↓ {d.label}
+								</a>
+							))}
+							{c.external && (
+								<a class="btn ghost" href={c.external.href} target="_blank" rel="noopener noreferrer">
+									↗ {c.external.label}
+								</a>
+							)}
+							<button class="btn evidence-toggle" type="button">
+								{c.evidenceLabel}
+							</button>
+						</div>
+						{c.fallbackHint && <p class="hint-line">{c.fallbackHint}</p>}
+
+						<div class="evidence hidden">
+							{c.evidence.map((e, i) => (
+								<figure>
+									<figcaption>
+										<span class="mono">
+											EVIDENCE {c.num}.{i + 1}
+										</span>{' '}
+										{e.caption}
+									</figcaption>
+									<a href={e.src} target="_blank" rel="noopener" class="shot" title="Open full size">
+										<img src={e.src} alt={e.caption} loading="lazy" decoding="async" />
+										<span class="zoom mono">Tap to enlarge ↗</span>
+									</a>
+									<ul class="notes">
+										{e.notes.map((n) => (
+											<li>{n}</li>
+										))}
+									</ul>
+								</figure>
+							))}
+						</div>
+
+						<form class="qform" novalidate>
+							<p class="eyebrow">Your findings</p>
+							{c.questions.map((q, qi) => (
+								<fieldset>
+									<legend>
+										<span class="mono qn">Q{qi + 1}</span> {q.text}
+									</legend>
+									<div class:list={['opts', { yn: q.options.length === 2 }]}>
+										{q.options.map((o) => (
+											<label class:list={['opt', { mono: q.mono }]}>
+												<input type="radio" name={q.id} value={o.id} required />
+												<span>{o.text}</span>
+											</label>
+										))}
+									</div>
+								</fieldset>
+							))}
+							<div class="result" aria-live="polite" />
+							<button class="btn block submit" type="submit">
+								Submit findings
+							</button>
+						</form>
+					</div>
+				</article>
+			))
+		}
+	</div>
+
+	<p class="foot muted">Keep this tab open. Your progress is saved on this device.</p>
+</CtfLayout>
+
+<script>
+	import { api, syncClock, remainingMs, fmtClock, toast, confetti } from '../../scripts/ctf-client.js';
+
+	const $ = (id: string) => document.getElementById(id)!;
+	let state: any = null;
+	let solvedMap: Record<string, any> = {};
+	let celebrated = false;
+
+	function renderSolved(id: string, info: any) {
+		const el = document.getElementById('case-' + id)!;
+		el.classList.add('solved');
+		const st = el.querySelector('.status')!;
+		st.textContent = `Solved +${info.points}`;
+		st.className = 'status pill ok';
+		const cap = el.querySelector('.captured')!;
+		cap.classList.remove('hidden');
+		cap.querySelector('.cap-flag')!.textContent = info.flag;
+		cap.querySelector('.cap-pts')!.textContent = `+${info.points} POINTS`;
+		cap.querySelector('.cap-take')!.textContent = info.takeaway;
+		const form = el.querySelector('.qform') as HTMLFormElement;
+		form.classList.add('hidden');
+	}
+
+	function applyState() {
+		const s = state;
+		const started = s?.started;
+		$('banner-wait').classList.toggle('hidden', !!started);
+		$('banner-closed').classList.toggle('hidden', !started || s.isOpen);
+		document.querySelectorAll('.case').forEach((c) => c.classList.toggle('locked', !started));
+		document.querySelectorAll<HTMLButtonElement>('.qform .submit').forEach((b) => (b.disabled = !started || !s.isOpen));
+	}
+
+	function updateScore(score: number, solved: number) {
+		$('score').textContent = String(score);
+		$('solved').textContent = String(solved);
+		const done = solved === 4;
+		$('finish').classList.toggle('hidden', !done);
+		if (done && !celebrated) {
+			celebrated = true;
+			if (sessionStorageGet('ctf_confetti') !== '1') { confetti(); sessionStorageSet('ctf_confetti', '1'); }
+		}
+	}
+	function sessionStorageGet(k: string) { try { return sessionStorage.getItem(k); } catch { return null; } }
+	function sessionStorageSet(k: string, v: string) { try { sessionStorage.setItem(k, v); } catch {} }
+
+	async function refresh() {
+		const me = await api('me');
+		if (!me.ok) return;
+		syncClock(me.state.serverNow);
+		state = me.state;
+		if (!me.registered) {
+			$('banner-noreg').classList.remove('hidden');
+			$('who').textContent = 'Not registered';
+			state = { ...state, isOpen: false };
+			applyState();
+			return;
+		}
+		$('who').textContent = me.handle;
+		for (const c of me.challenges) if (c.solved && !solvedMap[c.id]) { solvedMap[c.id] = c; renderSolved(c.id, c); }
+		updateScore(me.score, me.solved);
+		applyState();
+	}
+
+	// Accordion + evidence toggles
+	document.querySelectorAll('.case').forEach((el) => {
+		const head = el.querySelector('.case-head') as HTMLButtonElement;
+		const body = el.querySelector('.case-body')!;
+		head.addEventListener('click', () => {
+			if (el.classList.contains('locked')) return toast('Cases unlock when the challenge starts.');
+			const open = body.classList.toggle('hidden') === false;
+			head.setAttribute('aria-expanded', String(open));
+			el.classList.toggle('open', open);
+		});
+		const evBtn = el.querySelector('.evidence-toggle') as HTMLButtonElement;
+		const ev = el.querySelector('.evidence')!;
+		const label = evBtn.textContent!.trim();
+		evBtn.addEventListener('click', () => {
+			const shown = ev.classList.toggle('hidden') === false;
+			evBtn.textContent = shown ? 'Hide evidence' : label;
+			if (shown) ev.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		});
+
+		const form = el.querySelector('.qform') as HTMLFormElement;
+		const result = form.querySelector('.result')!;
+		const submit = form.querySelector('.submit') as HTMLButtonElement;
+		form.addEventListener('change', () => { result.textContent = ''; result.className = 'result'; });
+		form.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const fd = new FormData(form);
+			const answers = { q1: fd.get('q1'), q2: fd.get('q2'), q3: fd.get('q3') };
+			if (!answers.q1 || !answers.q2 || !answers.q3) {
+				result.textContent = 'Answer all three questions first.';
+				result.className = 'result bad';
+				return;
+			}
+			submit.disabled = true;
+			submit.textContent = 'Verifying…';
+			const id = (el as HTMLElement).dataset.id!;
+			const r = await api('submit', { method: 'POST', body: { challenge: id, answers } });
+			submit.textContent = 'Submit findings';
+			if (!r.ok) {
+				result.textContent = r.error || 'Submission failed.';
+				result.className = 'result bad';
+				const wait = r.retryAfterMs || (r.status === 429 ? 3000 : 0);
+				setTimeout(() => { submit.disabled = !(state?.isOpen); }, wait);
+				if (r.code === 'closed' || r.code === 'not_started') refresh();
+				return;
+			}
+			if (r.correct) {
+				const info = { points: POINTS_OF(id), flag: r.flag, takeaway: r.takeaway };
+				solvedMap[id] = info;
+				renderSolved(id, info);
+				if (typeof r.score === 'number') updateScore(r.score, r.solved);
+				else refresh();
+				toast(r.pointsAwarded ? `FLAG CAPTURED ✓ +${r.pointsAwarded}` : 'Already captured.');
+				el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			} else {
+				result.innerHTML = `<b>Not yet.</b> ${r.correctCount} of ${r.total} findings hold up. Re-check the evidence and try again.`;
+				result.className = 'result bad';
+				el.classList.add('shake');
+				setTimeout(() => el.classList.remove('shake'), 400);
+				setTimeout(() => { submit.disabled = !(state?.isOpen); }, r.cooldownMs || 4000);
+			}
+		});
+	});
+
+	function POINTS_OF(id: string) {
+		return Number((document.getElementById('case-' + id) as HTMLElement).dataset.points);
+	}
+
+	setInterval(() => {
+		const ms = state?.started ? remainingMs(state.endsAt) : null;
+		const t = $('timer');
+		t.textContent = fmtClock(ms);
+		t.classList.toggle('low', ms != null && ms < 120000);
+	}, 250);
+
+	refresh();
+	setInterval(refresh, 8000);
+	document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
+
+<style>
+	.hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 16px; margin-bottom: 16px; position: sticky; top: 8px; z-index: 5; backdrop-filter: blur(8px); background: rgba(15, 33, 57, 0.92); }
+	.hud div { display: grid; gap: 2px; }
+	.hud .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+	.hud .v b { font-size: 26px; font-weight: 800; color: var(--text); }
+	.hud .v i { font-style: normal; color: var(--dim); font-size: 14px; margin-left: 4px; }
+	#score { color: var(--cyan) !important; }
+	#timer.low { color: var(--orange) !important; }
+	.alert { margin-bottom: 16px; }
+	.cases { display: grid; gap: 12px; }
+	.case { border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(180deg, var(--panel), var(--bg-2)); overflow: hidden; transition: border-color 0.2s; }
+	.case.open { border-color: var(--line-2); }
+	.case.solved { border-color: rgba(34, 197, 94, 0.45); }
+	.case.locked { opacity: 0.55; }
+	.case.shake { animation: shake 0.35s; }
+	@keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+	.case-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 14px; padding: 16px; cursor: pointer; }
+	.case-head:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+	.case .num { font-size: 22px; font-weight: 800; color: var(--cyan); width: 34px; }
+	.case.solved .num { color: var(--green); }
+	.ttl { flex: 1; display: grid; gap: 2px; min-width: 0; }
+	.ttl .name { font-weight: 800; font-size: 17px; letter-spacing: 0.02em; }
+	.ttl .sub { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; }
+	.status { white-space: nowrap; }
+	.case-body { padding: 0 16px 18px; border-top: 1px solid var(--line); }
+	.brief { padding-top: 16px; display: grid; gap: 8px; }
+	.brief p { margin: 0; font-size: 16px; }
+	.brief b { color: var(--cyan); }
+	.policy { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--orange); border-radius: 10px; background: rgba(245, 158, 11, 0.08); font-weight: 700; display: grid; gap: 4px; }
+	.policy span { font-size: 11px; letter-spacing: 0.18em; color: var(--orange); }
+	.safety { font-size: 13px; color: var(--muted); margin: 12px 0 0; padding-left: 10px; border-left: 2px solid var(--line-2); }
+	.actions { display: grid; gap: 10px; margin-top: 16px; }
+	@media (min-width: 560px) { .actions { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); } }
+	.hint-line { font-size: 13px; color: var(--cyan); margin: 10px 0 0; }
+	.evidence { margin-top: 16px; display: grid; gap: 16px; }
+	figure { margin: 0; background: #06101d; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+	figcaption { padding: 10px 12px; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--line); }
+	figcaption .mono { color: var(--cyan); font-size: 11px; letter-spacing: 0.1em; }
+	.shot { display: block; position: relative; background: #fff; }
+	.shot img { display: block; width: 100%; height: auto; min-height: 80px; }
+	.zoom { position: absolute; right: 8px; bottom: 8px; font-size: 11px; background: rgba(7, 17, 31, 0.85); color: var(--cyan); padding: 4px 8px; border-radius: 6px; }
+	.notes { margin: 0; padding: 10px 12px 12px 28px; font-size: 14px; color: var(--muted); display: grid; gap: 4px; }
+	.qform { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line-2); }
+	fieldset { border: 0; padding: 0; margin: 12px 0 18px; }
+	legend { font-weight: 700; font-size: 16px; margin-bottom: 10px; padding: 0; }
+	.qn { color: var(--cyan); font-size: 13px; margin-right: 4px; }
+	.opts { display: grid; gap: 8px; }
+	.opts.yn { grid-template-columns: 1fr 1fr; }
+	.opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg); cursor: pointer; font-size: 15px; min-height: 48px; }
+	.opt.mono span { font-family: var(--mono); font-size: 14px; }
+	.opt input { accent-color: var(--cyan); width: 18px; height: 18px; margin: 2px 0 0; flex: none; }
+	.opt:has(input:checked) { border-color: var(--cyan); background: var(--cyan-dim); }
+	.result { min-height: 0; font-size: 14px; margin-bottom: 12px; }
+	.result.bad { color: var(--red); padding: 10px 12px; background: var(--red-dim); border-radius: 8px; }
+	.captured { margin-top: 16px; padding: 16px; border-radius: 10px; border: 1px solid rgba(34, 197, 94, 0.5); background: var(--green-dim); text-align: center; }
+	.cap-title { font-weight: 900; letter-spacing: 0.12em; color: var(--green); font-size: 18px; }
+	.cap-flag { font-size: 16px; margin: 8px 0 4px; }
+	.cap-pts { color: var(--green); font-weight: 800; }
+	.cap-take { margin: 10px 0 0; font-style: italic; color: var(--text); }
+	.finish { text-align: center; margin-bottom: 16px; border-color: rgba(34, 197, 94, 0.55); }
+	.finish .big { font-size: 48px; font-weight: 900; color: var(--green); margin: 6px 0; }
+	.finish h2 { font-size: 22px; letter-spacing: 0.04em; }
+	.finish .lead { font-size: 17px; margin: 10px 0 4px; }
+	.finish .muted { margin: 0 0 14px; }
+	.foot { text-align: center; font-size: 13px; margin-top: 24px; }
+	@media (max-width: 380px) { .hud .v b { font-size: 21px; } .case .status { font-size: 10px; padding: 3px 7px; } }
+</style>

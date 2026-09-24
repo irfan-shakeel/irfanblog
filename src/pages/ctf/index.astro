@@ -1,0 +1,78 @@
+---
+import CtfLayout from '../../layouts/CtfLayout.astro';
+import { EVENT, PIPELINE } from '../../../ctf-lib/content.js';
+---
+
+<CtfLayout title="Can You Trust This File? · NMT SOC Challenge">
+	<div class="topbar">
+		<span class="brand"><span class="dot"></span>{EVENT.org}</span>
+		<span id="status" class="pill">Checking…</span>
+	</div>
+
+	<section class="hero">
+		<p class="eyebrow">Live SOC Decision Challenge</p>
+		<h1>CAN YOU TRUST<br />THIS FILE?</h1>
+		<p class="sub">{EVENT.subtitle}</p>
+		<div class="meta mono">
+			<span><b>4</b> cases</span><span class="sep">·</span><span><b>20</b> minutes</span><span class="sep">·</span><span><b>100</b> points</span>
+		</div>
+		<div class="ctas">
+			<a id="enter" class="btn block" href="/ctf/register">Enter the challenge →</a>
+			<a class="btn ghost block" href="/ctf/leaderboard">View live leaderboard</a>
+		</div>
+	</section>
+
+	<ol class="pipeline mono" aria-label="Decision pipeline">
+		{PIPELINE.map((s, i) => <li class:list={{ last: i === PIPELINE.length - 1 }}>{s}</li>)}
+	</ol>
+
+	<section class="card rules">
+		<h2 class="eyebrow">Rules of engagement</h2>
+		<ul>
+			<li>Individual challenge.</li>
+			<li>Internet research is allowed. <span class="mono">FileScan.IO</span> is allowed.</li>
+			<li>Use only the supplied workshop artifacts.</li>
+			<li>Do not share answers with another student.</li>
+			<li class="warn">Do not upload personal, university, proprietary or research data.</li>
+			<li>Highest score wins. <b>Completion time breaks ties.</b></li>
+		</ul>
+	</section>
+
+	<p class="quote">“A clean verdict is not a trust decision.”</p>
+</CtfLayout>
+
+<script>
+	import { api } from '../../scripts/ctf-client.js';
+	(async () => {
+const me = await api('me');
+	const st = document.getElementById('status')!;
+	if (me.ok) {
+		const s = me.state;
+		if (!s.started) { st.textContent = 'Registration open'; st.className = 'pill live'; }
+		else if (s.isOpen) { st.textContent = '● Live'; st.className = 'pill ok'; }
+		else { st.textContent = 'Submissions closed'; st.className = 'pill warn'; }
+		if (me.registered) {
+			const a = document.getElementById('enter') as HTMLAnchorElement;
+			a.href = '/ctf/challenge';
+			a.textContent = `Continue as ${me.handle} →`;
+		}
+	} else st.textContent = 'Offline';
+})();
+</script>
+
+<style>
+	.hero { padding: 28px 0 8px; }
+	h1 { font-size: clamp(40px, 11vw, 76px); font-weight: 900; letter-spacing: -0.03em; margin: 10px 0 12px; }
+	.sub { font-size: 20px; color: var(--muted); margin: 0 0 16px; font-weight: 600; }
+	.meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 15px; color: var(--muted); margin-bottom: 28px; }
+	.meta b { color: var(--orange); }
+	.meta .sep { color: var(--dim); }
+	.ctas { display: grid; gap: 12px; }
+	.pipeline { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 32px 0; font-size: 11px; letter-spacing: 0.1em; }
+	.pipeline li { padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 6px; color: var(--muted); background: var(--bg-2); }
+	.pipeline li.last { color: #04121f; background: var(--cyan); border-color: var(--cyan); font-weight: 800; }
+	.rules ul { margin: 12px 0 0; padding-left: 20px; display: grid; gap: 8px; color: var(--text); }
+	.rules li.warn { color: #ffd9a0; }
+	.quote { text-align: center; margin: 32px 0 0; font-size: 18px; font-style: italic; color: var(--muted); }
+	@media (min-width: 640px) { .ctas { grid-template-columns: 1fr 1fr; } }
+</style>

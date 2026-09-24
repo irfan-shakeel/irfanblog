@@ -1,0 +1,129 @@
+---
+import CtfLayout from '../../layouts/CtfLayout.astro';
+import { EVENT } from '../../../ctf-lib/content.js';
+---
+
+<CtfLayout title="Register · NMT SOC Challenge">
+	<div class="topbar">
+		<a class="brand" href="/ctf" style="text-decoration:none"><span class="dot"></span>{EVENT.org}</a>
+		<span class="pill live">Analyst registration</span>
+	</div>
+
+	<section id="step-register">
+		<p class="eyebrow">Step 1 of 2</p>
+		<h1 class="title">Register as an analyst</h1>
+		<p class="muted">One time only. No password, no account.</p>
+
+		<div id="resume-bad" class="alert bad hidden">That re-entry link has expired or was already used. Ask the instructor for a new one.</div>
+
+		<form id="reg" class="card" novalidate>
+			<div class="field" data-f="fullName">
+				<label for="fullName">Full name</label>
+				<input id="fullName" name="fullName" autocomplete="name" maxlength="80" placeholder="Jane Doe" required />
+				<div class="ferr"></div>
+			</div>
+			<div class="field" data-f="email">
+				<label for="email">Email</label>
+				<input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" maxlength="254" placeholder="jane@nmt.edu" required />
+				<div class="ferr"></div>
+			</div>
+			<div class="field" data-f="handle">
+				<label for="handle">Analyst handle <span class="pub">(public)</span></label>
+				<input id="handle" name="handle" class="mono" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="24" placeholder="PacketNinja" pattern="[A-Za-z0-9_-]{3,24}" required />
+				<div class="hint">3–24 characters: letters, numbers, <span class="mono">_</span> or <span class="mono">-</span></div>
+				<div class="ferr"></div>
+			</div>
+
+			<p class="privacy">🔒 We use your full name and email only to identify participants and winners. The public leaderboard shows only your <b>Analyst Handle</b>.</p>
+
+			<div id="formerr" class="alert bad hidden"></div>
+			<button id="submit" class="btn block" type="submit">Register →</button>
+		</form>
+	</section>
+
+	<section id="step-mission" class="hidden">
+		<p class="eyebrow">Step 2 of 2 · Analyst <span id="who" class="mono"></span></p>
+		<h1 class="title">YOUR MISSION</h1>
+		<div class="card mission">
+			<p class="lead">You are the SOC analyst protecting a <b>sensitive research environment</b>.</p>
+			<p class="muted">For each case:</p>
+			<ol>
+				<li><span>01</span> Inspect the evidence</li>
+				<li><span>02</span> Decide what matters</li>
+				<li><span>03</span> Submit your findings</li>
+				<li><span>04</span> Capture the flag</li>
+				<li><span>05</span> Watch your score climb</li>
+			</ol>
+		</div>
+		<a class="btn block" href="/ctf/challenge" style="margin-top:20px">I'm ready →</a>
+	</section>
+</CtfLayout>
+
+<script>
+	import { api } from '../../scripts/ctf-client.js';
+
+	const $ = (id: string) => document.getElementById(id)!;
+	const showMission = (handle: string) => {
+		$('who').textContent = handle;
+		$('step-register').classList.add('hidden');
+		$('step-mission').classList.remove('hidden');
+		window.scrollTo(0, 0);
+	};
+
+	if (new URLSearchParams(location.search).get('resume') === 'invalid') $('resume-bad').classList.remove('hidden');
+
+	(async () => {
+const me = await api('me');
+	if (me.ok && me.registered) showMission(me.handle);
+
+	const form = $('reg') as HTMLFormElement;
+	const clearErrors = () => {
+		form.querySelectorAll('.field').forEach((f) => { f.classList.remove('invalid'); f.querySelector('.ferr')!.textContent = ''; });
+		$('formerr').classList.add('hidden');
+	};
+	const setField = (name: string, msg: string) => {
+		const f = form.querySelector(`[data-f="${name}"]`);
+		if (!f) return;
+		f.classList.add('invalid');
+		f.querySelector('.ferr')!.textContent = msg;
+	};
+
+	form.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		clearErrors();
+		const fd = new FormData(form);
+		const body = { fullName: String(fd.get('fullName') || '').trim(), email: String(fd.get('email') || '').trim(), handle: String(fd.get('handle') || '').trim() };
+		let bad = false;
+		if (body.fullName.length < 2) { setField('fullName', 'Full name is required.'); bad = true; }
+		if (!/^\S+@\S+\.\S{2,}$/.test(body.email)) { setField('email', 'Enter a valid email address.'); bad = true; }
+		if (!/^[A-Za-z0-9_-]{3,24}$/.test(body.handle)) { setField('handle', '3–24 characters: letters, numbers, _ or -.'); bad = true; }
+		if (bad) return;
+
+		const btn = $('submit') as HTMLButtonElement;
+		btn.disabled = true;
+		btn.textContent = 'Registering…';
+		const r = await api('register', { method: 'POST', body });
+		btn.disabled = false;
+		btn.textContent = 'Register →';
+		if (r.ok) return showMission(r.handle);
+		if (r.fields) for (const [k, v] of Object.entries(r.fields)) setField(k, v as string);
+		$('formerr').textContent = r.error || 'Registration failed.';
+		$('formerr').classList.remove('hidden');
+	});
+})();
+</script>
+
+<style>
+	.title { font-size: clamp(30px, 8vw, 44px); font-weight: 900; margin: 8px 0 6px; }
+	form { margin-top: 20px; }
+	.pub { color: var(--cyan); text-transform: none; letter-spacing: 0; font-weight: 600; }
+	.privacy { font-size: 14px; color: var(--muted); background: var(--bg); border: 1px dashed var(--line-2); border-radius: 10px; padding: 12px 14px; margin: 4px 0 16px; }
+	.privacy b { color: var(--text); }
+	#formerr { margin-bottom: 12px; }
+	#resume-bad { margin-top: 16px; }
+	.mission { margin-top: 20px; }
+	.mission .lead { font-size: 19px; margin: 0 0 12px; }
+	.mission ol { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 10px; }
+	.mission li { display: flex; gap: 14px; align-items: center; font-size: 17px; font-weight: 600; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+	.mission li span { font-family: var(--mono); color: var(--cyan); font-size: 13px; }
+</style>
