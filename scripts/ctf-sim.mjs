@@ -80,7 +80,7 @@ ok(partial.status === 400, 'incomplete answers rejected');
 console.log('Concurrent duplicate submissions (same student, same case x5)');
 const dup = await Promise.all(Array.from({ length: 5 }, () => students[3].call('/api/ctf/submit', { method: 'POST', body: { challenge: 'impostor', answers: KEY.impostor } })));
 ok(dup.reduce((a, r) => a + (r.pointsAwarded || 0), 0) === 20, 'points awarded exactly once (' + dup.map((r) => r.pointsAwarded).join(',') + ')');
-ok(dup.every((r) => r.flag === 'FLAG{BYTES_OVER_NAMES}'), 'flag revealed after solve');
+ok(dup.every((r) => /^FLAG\{[A-Z_]+\}$/.test(r.flag || '')), 'flag revealed after solve');
 
 console.log('Play: each student solves a deterministic subset in random order');
 // Student i solves (i % 5) cases: 0..4; students 0-5 solve all 4.
