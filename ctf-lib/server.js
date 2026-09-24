@@ -8,7 +8,8 @@ const ADMIN_MAX_AGE = 60 * 60 * 12; // 12 hours
 
 export const POINTS = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.points]));
 export const TITLES = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
-const FLAG_ENV = { impostor: 'CTF_FLAG_IMPOSTOR', box: 'CTF_FLAG_BOX', green: 'CTF_FLAG_GREEN', dlp: 'CTF_FLAG_DLP' };
+export const CASE_COUNT = CHALLENGES.length;
+const QUESTIONS = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.questions]));
 
 // ---------- responses ----------
 export function json(data, status = 200, headers = {}) {
@@ -173,15 +174,40 @@ export function answerKey(env) {
 	return key;
 }
 export function flagFor(env, challengeId) {
-	return env[FLAG_ENV[challengeId]] || 'FLAG{NOT_CONFIGURED}';
+	return env['CTF_FLAG_' + challengeId.toUpperCase()] || 'FLAG{NOT_CONFIGURED}';
 }
-export function checkAnswers(env, challengeId, answers) {
+
+// Validates the SHAPE of a submission against the public question definitions only
+// (every question answered, option ids exist, multi-select has exactly `pick` distinct ids).
+// Returns normalized answers or null. Never consults the answer key, so a 400 leaks nothing.
+export function normalizeAnswers(challengeId, answers) {
+	if (!answers || typeof answers !== 'object') return null;
+	const out = {};
+	for (const q of QUESTIONS[challengeId]) {
+		const ids = new Set(q.options.map((o) => o.id));
+		const a = answers[q.id];
+		if (q.type === 'multi') {
+			if (!Array.isArray(a) || a.length !== q.pick) return null;
+			const uniq = [...new Set(a.map(String))];
+			if (uniq.length !== q.pick || !uniq.every((x) => ids.has(x))) return null;
+			out[q.id] = uniq.sort();
+		} else {
+			if (typeof a !== 'string' || !ids.has(a)) return null;
+			out[q.id] = a;
+		}
+	}
+	return out;
+}
+
+// All-or-nothing: returns only a boolean so callers cannot leak per-question results.
+export function isCorrect(env, challengeId, normalized) {
 	const key = answerKey(env)[challengeId];
 	if (!key) throw new HttpError('Answer key missing for ' + challengeId, 503);
-	const qids = Object.keys(key);
-	let correct = 0;
-	for (const q of qids) if (typeof answers[q] === 'string' && answers[q] === key[q]) correct++;
-	return { correct, total: qids.length, allCorrect: correct === qids.length };
+	return QUESTIONS[challengeId].every((q) => {
+		const k = key[q.id], a = normalized[q.id];
+		if (Array.isArray(k)) return Array.isArray(a) && a.length === k.length && [...k].sort().every((x, i) => x === a[i]);
+		return a === k;
+	});
 }
 export function validChallenge(id) {
 	return CHALLENGE_IDS.includes(id);
@@ -208,40 +234,44 @@ export function publicState(s) {
 }
 
 // ---------- leaderboard ----------
+// Score = sum of points from passed final submissions. Tie-break: passed count, then the
+// time the current score was reached (latest passed submission), then registration time.
 export async function computeBoard(env, { includeHidden = false, limit = 15 } = {}) {
 	const db = env.CTF_DB;
 	const hid = includeHidden ? '' : 'WHERE p.is_hidden = 0';
 	const [rows, counts, perChal, latest] = await db.batch([
 		db.prepare(
-			`SELECT p.id, p.handle, COALESCE(SUM(s.points),0) AS score, COUNT(s.challenge_id) AS solved,
-			        MAX(s.solved_at) AS last_solve_at, p.created_at
-			   FROM participants p LEFT JOIN solves s ON s.participant_id = p.id
+			`SELECT p.id, p.handle, COALESCE(SUM(a.points_awarded),0) AS score, COALESCE(SUM(a.passed),0) AS solved,
+			        COUNT(a.challenge_id) AS attempted,
+			        MAX(CASE WHEN a.passed = 1 THEN a.submitted_at END) AS last_solve_at, p.created_at
+			   FROM participants p LEFT JOIN attempts a ON a.participant_id = p.id
 			   ${hid}
 			  GROUP BY p.id
 			  ORDER BY score DESC, solved DESC, (last_solve_at IS NULL) ASC, last_solve_at ASC, p.created_at ASC, p.id ASC`
 		),
 		db.prepare(
 			`SELECT (SELECT COUNT(*) FROM participants p ${hid}) AS analysts,
-			        (SELECT COUNT(*) FROM submissions x JOIN participants p ON p.id = x.participant_id ${hid}) AS submissions,
-			        (SELECT COUNT(*) FROM solves x JOIN participants p ON p.id = x.participant_id ${hid}) AS solves`
+			        (SELECT COUNT(*) FROM attempts a JOIN participants p ON p.id = a.participant_id ${hid}) AS submissions,
+			        (SELECT COALESCE(SUM(a.passed),0) FROM attempts a JOIN participants p ON p.id = a.participant_id ${hid}) AS solves`
 		),
 		db.prepare(
-			`SELECT s.challenge_id, COUNT(*) AS n FROM solves s JOIN participants p ON p.id = s.participant_id ${hid} GROUP BY s.challenge_id`
+			`SELECT a.challenge_id, COALESCE(SUM(a.passed),0) AS passed, COUNT(*) AS attempted
+			   FROM attempts a JOIN participants p ON p.id = a.participant_id ${hid} GROUP BY a.challenge_id`
 		),
 		db.prepare(
-			`SELECT p.handle, s.challenge_id, s.solved_at FROM solves s JOIN participants p ON p.id = s.participant_id
-			  ${hid} ORDER BY s.solved_at DESC LIMIT 5`
+			`SELECT p.handle, a.challenge_id, a.submitted_at FROM attempts a JOIN participants p ON p.id = a.participant_id
+			  ${hid ? hid + ' AND' : 'WHERE'} a.passed = 1 ORDER BY a.submitted_at DESC LIMIT 5`
 		),
 	]);
-	const all = rows.results.map((r, i) => ({ rank: i + 1, id: r.id, handle: r.handle, score: r.score, solved: r.solved, lastSolveAt: r.last_solve_at }));
+	const all = rows.results.map((r, i) => ({ rank: i + 1, id: r.id, handle: r.handle, score: r.score, solved: r.solved, attempted: r.attempted, lastSolveAt: r.last_solve_at }));
 	const c = counts.results[0] || { analysts: 0, submissions: 0, solves: 0 };
-	const pc = Object.fromEntries(perChal.results.map((r) => [r.challenge_id, r.n]));
+	const pc = Object.fromEntries(perChal.results.map((r) => [r.challenge_id, r]));
 	return {
 		all,
-		leaders: all.slice(0, limit).map(({ id, ...rest }) => rest),
-		stats: { analysts: c.analysts, submissions: c.submissions, solves: c.solves },
-		progress: CHALLENGES.map((ch) => ({ id: ch.id, title: ch.title, solved: pc[ch.id] || 0 })),
-		latest: latest.results.map((r) => ({ handle: r.handle, challenge: TITLES[r.challenge_id] || r.challenge_id, at: r.solved_at })),
+		leaders: all.slice(0, limit).map(({ id, attempted, ...rest }) => rest),
+		stats: { analysts: c.analysts, submissions: c.submissions, solves: c.solves, cases: CASE_COUNT },
+		progress: CHALLENGES.map((ch) => ({ id: ch.id, title: ch.title, solved: pc[ch.id]?.passed || 0, attempted: pc[ch.id]?.attempted || 0 })),
+		latest: latest.results.map((r) => ({ handle: r.handle, challenge: TITLES[r.challenge_id] || r.challenge_id, at: r.solved_at || r.submitted_at })),
 	};
 }
 

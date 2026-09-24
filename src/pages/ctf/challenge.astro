@@ -1,9 +1,14 @@
 ---
 import CtfLayout from '../../layouts/CtfLayout.astro';
-import { CHALLENGES, EVENT } from '../../../ctf-lib/content.js';
+import { CHALLENGES, EVENT, CASE_COUNT } from '../../../ctf-lib/content.js';
 
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+// "**bold**" and "@filename" (inline mono) in prompt lines
 const md = (s: string) =>
-	s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+	esc(s)
+		.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+		.replace(/@([\w.\-/]+[\w])/g, '<span class="fname">$1</span>');
+const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.kind === 'hex'));
 ---
 
 <CtfLayout title="Cases · NMT SOC Challenge">
@@ -14,59 +19,45 @@ const md = (s: string) =>
 
 	<section class="hud card" aria-label="Your status">
 		<div><span class="k">Score</span><span class="v mono"><b id="score">0</b><i>/ {EVENT.maxScore}</i></span></div>
-		<div><span class="k">Solved</span><span class="v mono"><b id="solved">0</b><i>/ 4</i></span></div>
+		<div><span class="k">Passed</span><span class="v mono"><b id="solved">0</b><i>/ {CASE_COUNT}</i></span></div>
 		<div><span class="k">Time</span><span class="v mono"><b id="timer">--:--</b></span></div>
 	</section>
+	<p class="rule mono">ONE FINAL SUBMISSION PER CASE</p>
 
-	<div id="banner-wait" class="alert info hidden"><b>Standing by.</b> The cases unlock when the instructor starts the challenge. This page updates automatically.</div>
+	<div id="banner-wait" class="alert info hidden"><b>Standing by.</b> The cases unlock when the instructor starts the challenge.</div>
 	<div id="banner-closed" class="alert bad hidden"><b>Submissions are closed.</b> Stay on this page for the final reveal.</div>
 	<div id="banner-noreg" class="alert bad hidden">You're not registered on this device. <a href="/ctf/register">Register here</a>.</div>
 
 	<section id="finish" class="card finish hidden">
-		<p class="eyebrow">Mission complete</p>
-		<div class="big mono">100 / 100</div>
-		<h2>ALL FOUR CASES SOLVED</h2>
-		<p class="lead">You made it through the trust boundary.</p>
+		<div class="big mono" id="finish-score">100 / 100</div>
+		<h2 id="finish-title">ALL FIVE CASES PASSED</h2>
+		<p class="lead" id="finish-lead">You made it through the trust boundary.</p>
 		<p class="muted">Stay on this page. Final rankings will be revealed shortly.</p>
-		<a class="btn ghost sm" href="/ctf/leaderboard" target="_blank" rel="noopener">View leaderboard</a>
 	</section>
 
 	<div class="cases">
 		{
-			CHALLENGES.map((c) => (
-				<article class="case locked" id={`case-${c.id}`} data-id={c.id} data-points={c.points}>
-					<button class="case-head" type="button" aria-expanded="false" aria-controls={`body-${c.id}`}>
+			CHALLENGES.map((c: any) => (
+				<article class="case locked" id={`case-${c.id}`} data-id={c.id} data-points={c.points} data-stepper={c.stepper ? '1' : ''}>
+					<button class="case-head" type="button" aria-expanded="false">
 						<span class="num mono">{c.num}</span>
 						<span class="ttl">
 							<span class="name">{c.title}</span>
-							<span class="sub mono">
-								{c.stage} · {c.points} pts
-							</span>
+							<span class="sub mono">{c.points} pts</span>
 						</span>
-						<span class="status pill">Not solved</span>
+						<span class="status pill">Open</span>
 					</button>
 
-					<div class="case-body hidden" id={`body-${c.id}`}>
-						<div class="captured hidden">
-							<div class="cap-title">FLAG CAPTURED ✓</div>
-							<div class="flag cap-flag" />
-							<div class="cap-pts mono" />
-							<p class="cap-take" />
-						</div>
+					<div class="case-body hidden">
+						<div class="outcome hidden" />
 
+						{c.headline && <p class="headline mono">{c.headline}</p>}
 						<div class="brief">
-							{c.brief.map((line) => (line.startsWith('@file ') ? <div class="file">{line.slice(6)}</div> : <p set:html={md(line)} />))}
+							{c.prompt.map((line: string) => (line.startsWith('@') && !line.includes(' ') ? <div class="file">{line.slice(1)}</div> : <p set:html={md(line)} />))}
 						</div>
-						{c.policy && (
-							<div class="policy">
-								<span class="mono">POLICY</span>
-								{c.policy}
-							</div>
-						)}
-						{c.safetyNote && <p class="safety">{c.safetyNote}</p>}
 
 						<div class="actions">
-							{c.downloads.map((d) => (
+							{c.downloads.map((d: any) => (
 								<a class="btn ghost" href={d.href} download>
 									↓ {d.label}
 								</a>
@@ -76,45 +67,80 @@ const md = (s: string) =>
 									↗ {c.external.label}
 								</a>
 							)}
-							<button class="btn evidence-toggle" type="button">
-								{c.evidenceLabel}
-							</button>
+							{hidden(c) && (
+								<button class="btn evidence-toggle" type="button">
+									{c.evidenceButton || 'INSPECT RAW'}
+								</button>
+							)}
 						</div>
-						{c.fallbackHint && <p class="hint-line">{c.fallbackHint}</p>}
 
-						<div class="evidence hidden">
-							{c.evidence.map((e, i) => (
-								<figure>
-									<figcaption>
-										<span class="mono">
-											EVIDENCE {c.num}.{i + 1}
-										</span>{' '}
-										{e.caption}
-									</figcaption>
-									<a href={e.src} target="_blank" rel="noopener" class="shot" title="Open full size">
-										<img src={e.src} alt={e.caption} loading="lazy" decoding="async" />
-										<span class="zoom mono">Tap to enlarge ↗</span>
-									</a>
-									<ul class="notes">
-										{e.notes.map((n) => (
-											<li>{n}</li>
-										))}
-									</ul>
-								</figure>
-							))}
+						<div class:list={['evidence', { hidden: hidden(c), stepper: c.stepper }]}>
+							{c.stepper && (
+								<div class="step-nav">
+									<button type="button" class="btn ghost sm step-prev">← Prev</button>
+									<span class="mono step-label">EVIDENCE 1 OF {c.evidence.length}</span>
+									<button type="button" class="btn sm step-next">Next evidence →</button>
+								</div>
+							)}
+							{c.evidence
+								.filter((e: any) => c.stepper || e.kind !== 'policy')
+								.map((e: any, i: number) => (
+									<section class:list={['ev', 'ev-' + e.kind, { hidden: c.stepper && i > 0 }]} data-step={i}>
+										<header class="ev-title mono">{e.title}</header>
+										{e.kind === 'record' && (
+											<dl class="rec mono">
+												{e.rows.map(([k, v]: [string, string]) => (
+													<div class:list={{ grp: v === '', ind: k.startsWith('  ') }}>
+														<dt>{k.trim()}</dt>
+														<dd>{v}</dd>
+													</div>
+												))}
+											</dl>
+										)}
+										{e.kind === 'tree' && <pre class="tree mono">{e.lines.join('\n')}</pre>}
+										{e.kind === 'policy' && <p class="policy-text">{e.text}</p>}
+										{e.kind === 'hex' && (
+											<div class="hex mono" role="table" aria-label="Raw bytes">
+												{e.rows.map((r: any) => (
+													<div class="hrow" role="row">
+														<span class="off">{r.offset}</span>
+														<span class="hx">{r.hex}</span>
+														<span class="asc">{r.ascii}</span>
+													</div>
+												))}
+											</div>
+										)}
+										{e.kind === 'image' && (
+											<a href={e.src} target="_blank" rel="noopener" class="shot" title="Open full size">
+												<img src={e.src} alt={e.title} loading="lazy" decoding="async" />
+												<span class="zoom mono">Enlarge ↗</span>
+											</a>
+										)}
+									</section>
+								))}
 						</div>
+
+						{!c.stepper &&
+							c.evidence
+								.filter((e: any) => e.kind === 'policy')
+								.map((e: any) => (
+									<div class="policy">
+										<span class="mono">{e.title.toUpperCase()}</span>
+										{e.text}
+									</div>
+								))}
 
 						<form class="qform" novalidate>
-							<p class="eyebrow">Your findings</p>
-							{c.questions.map((q, qi) => (
-								<fieldset>
+							{c.questions.map((q: any, qi: number) => (
+								<fieldset data-q={q.id} data-type={q.type} data-pick={q.pick || 1}>
 									<legend>
 										<span class="mono qn">Q{qi + 1}</span> {q.text}
+										{q.type === 'multi' && <span class="pickhint mono"> Select exactly {q.pick}.</span>}
 									</legend>
-									<div class:list={['opts', { yn: q.options.length === 2 }]}>
-										{q.options.map((o) => (
+									<div class:list={['opts', { yn: q.options.length === 2, dec: q.mono }]}>
+										{q.options.map((o: any) => (
 											<label class:list={['opt', { mono: q.mono }]}>
-												<input type="radio" name={q.id} value={o.id} required />
+												<input type={q.type === 'multi' ? 'checkbox' : 'radio'} name={q.id} value={o.id} />
 												<span>{o.text}</span>
 											</label>
 										))}
@@ -122,8 +148,9 @@ const md = (s: string) =>
 								</fieldset>
 							))}
 							<div class="result" aria-live="polite" />
+							{c.stepper && <p class="gate mono">View all {c.evidence.length} evidence items to unlock submission.</p>}
 							<button class="btn block submit" type="submit">
-								Submit findings
+								Submit final decision
 							</button>
 						</form>
 					</div>
@@ -132,53 +159,82 @@ const md = (s: string) =>
 		}
 	</div>
 
+	<dialog id="confirm" aria-labelledby="confirm-title">
+		<div class="dlg">
+			<h2 id="confirm-title">FINAL SUBMISSION</h2>
+			<p class="mono dlg-case" id="confirm-case"></p>
+			<p><b>You have one attempt for this case. Once submitted, your answers cannot be changed.</b></p>
+			<div class="dlg-actions">
+				<button type="button" class="btn ghost" id="confirm-back">Go back</button>
+				<button type="button" class="btn" id="confirm-go">Submit</button>
+			</div>
+		</div>
+	</dialog>
+
 	<p class="foot muted">Keep this tab open. Your progress is saved on this device.</p>
 </CtfLayout>
 
 <script>
-	import { api, syncClock, remainingMs, fmtClock, toast, confetti } from '../../scripts/ctf-client.js';
+	import { api, syncClock, remainingMs, fmtClock, toast, confetti, esc } from '../../scripts/ctf-client.js';
 
 	const $ = (id: string) => document.getElementById(id)!;
+	const CASES = [...document.querySelectorAll<HTMLElement>('.case')];
+	const TOTAL = CASES.length;
 	let state: any = null;
-	let solvedMap: Record<string, any> = {};
+	const statusById: Record<string, any> = {};
 	let celebrated = false;
 
-	function renderSolved(id: string, info: any) {
-		const el = document.getElementById('case-' + id)!;
-		el.classList.add('solved');
+	const ss = {
+		get(k: string) { try { return sessionStorage.getItem(k); } catch { return null; } },
+		set(k: string, v: string) { try { sessionStorage.setItem(k, v); } catch {} },
+	};
+
+	function renderOutcome(el: HTMLElement, info: any) {
+		const pts = Number(el.dataset.points);
 		const st = el.querySelector('.status')!;
-		st.textContent = `Solved +${info.points}`;
-		st.className = 'status pill ok';
-		const cap = el.querySelector('.captured')!;
-		cap.classList.remove('hidden');
-		cap.querySelector('.cap-flag')!.textContent = info.flag;
-		cap.querySelector('.cap-pts')!.textContent = `+${info.points} POINTS`;
-		cap.querySelector('.cap-take')!.textContent = info.takeaway;
-		const form = el.querySelector('.qform') as HTMLFormElement;
-		form.classList.add('hidden');
+		const out = el.querySelector('.outcome') as HTMLElement;
+		el.classList.remove('open-case');
+		if (info.status === 'passed') {
+			el.classList.add('solved');
+			st.textContent = `Passed +${info.points}`;
+			st.className = 'status pill ok';
+			out.className = 'outcome captured';
+			out.innerHTML = `<div class="cap-title">FLAG CAPTURED ✓</div><div class="flag cap-flag">${esc(info.flag || '')}</div><div class="cap-pts mono">+${info.points} POINTS</div>${info.takeaway ? `<p class="cap-take">${esc(info.takeaway)}</p>` : ''}`;
+		} else {
+			el.classList.add('failed');
+			st.textContent = 'Closed · 0';
+			st.className = 'status pill bad';
+			out.className = 'outcome closed';
+			out.innerHTML = `<div class="cl-title">CASE CLOSED</div><p class="cl-sub">This decision did not pass.</p><div class="cl-pts mono">0 / ${pts} points</div><p class="cl-note">Correct answers will be discussed by the instructor after the competition.</p>`;
+		}
+		(el.querySelector('.qform') as HTMLElement).classList.add('hidden');
+		el.querySelectorAll('input').forEach((i) => ((i as HTMLInputElement).disabled = true));
 	}
 
 	function applyState() {
-		const s = state;
-		const started = s?.started;
+		const started = state?.started;
 		$('banner-wait').classList.toggle('hidden', !!started);
-		$('banner-closed').classList.toggle('hidden', !started || s.isOpen);
-		document.querySelectorAll('.case').forEach((c) => c.classList.toggle('locked', !started));
-		document.querySelectorAll<HTMLButtonElement>('.qform .submit').forEach((b) => (b.disabled = !started || !s.isOpen));
+		$('banner-closed').classList.toggle('hidden', !started || state.isOpen);
+		CASES.forEach((c) => c.classList.toggle('locked', !started));
+		CASES.forEach((c) => updateGate(c));
 	}
 
-	function updateScore(score: number, solved: number) {
+	function updateScore(score: number, passed: number, attempted: number) {
 		$('score').textContent = String(score);
-		$('solved').textContent = String(solved);
-		const done = solved === 4;
+		$('solved').textContent = String(passed);
+		const done = attempted >= TOTAL;
 		$('finish').classList.toggle('hidden', !done);
-		if (done && !celebrated) {
+		if (!done) return;
+		const perfect = score === 100;
+		$('finish-score').textContent = `${score} / 100`;
+		$('finish-title').textContent = perfect ? 'ALL FIVE CASES PASSED' : 'ALL CASES SUBMITTED';
+		$('finish-lead').textContent = perfect ? 'You made it through the trust boundary.' : `${passed} of ${TOTAL} cases passed. This is your final score.`;
+		$('finish').classList.toggle('perfect', perfect);
+		if (perfect && !celebrated) {
 			celebrated = true;
-			if (sessionStorageGet('ctf_confetti') !== '1') { confetti(); sessionStorageSet('ctf_confetti', '1'); }
+			if (ss.get('ctf_confetti') !== '1') { confetti(); ss.set('ctf_confetti', '1'); }
 		}
 	}
-	function sessionStorageGet(k: string) { try { return sessionStorage.getItem(k); } catch { return null; } }
-	function sessionStorageSet(k: string, v: string) { try { sessionStorage.setItem(k, v); } catch {} }
 
 	async function refresh() {
 		const me = await api('me');
@@ -193,13 +249,55 @@ const md = (s: string) =>
 			return;
 		}
 		$('who').textContent = me.handle;
-		for (const c of me.challenges) if (c.solved && !solvedMap[c.id]) { solvedMap[c.id] = c; renderSolved(c.id, c); }
-		updateScore(me.score, me.solved);
+		for (const c of me.challenges) {
+			if (c.status !== 'open' && !statusById[c.id]) {
+				statusById[c.id] = c;
+				renderOutcome(document.getElementById('case-' + c.id)!, c);
+			}
+		}
+		updateScore(me.score, me.passed, me.attempted);
 		applyState();
 	}
 
-	// Accordion + evidence toggles
-	document.querySelectorAll('.case').forEach((el) => {
+	// ---- Case 05 stepper: must view every evidence item before submitting ----
+	function viewedKey(id: string) { return 'ctf_viewed_' + id; }
+	function viewedSet(id: string): Set<number> { try { return new Set(JSON.parse(ss.get(viewedKey(id)) || '[]')); } catch { return new Set(); } }
+	function updateGate(el: HTMLElement) {
+		const btn = el.querySelector('.qform .submit') as HTMLButtonElement;
+		const open = !!(state?.started && state?.isOpen);
+		let ok = open;
+		if (el.dataset.stepper) {
+			const total = el.querySelectorAll('.ev').length;
+			const all = viewedSet(el.dataset.id!).size >= total;
+			el.querySelector('.gate')?.classList.toggle('hidden', all);
+			ok = ok && all;
+		}
+		btn.disabled = !ok;
+	}
+	document.querySelectorAll<HTMLElement>('.case[data-stepper="1"]').forEach((el) => {
+		const steps = [...el.querySelectorAll<HTMLElement>('.ev')];
+		const label = el.querySelector('.step-label')!;
+		const prev = el.querySelector('.step-prev') as HTMLButtonElement;
+		const next = el.querySelector('.step-next') as HTMLButtonElement;
+		let cur = 0;
+		const show = (i: number) => {
+			cur = Math.max(0, Math.min(steps.length - 1, i));
+			steps.forEach((s, j) => s.classList.toggle('hidden', j !== cur));
+			label.textContent = `EVIDENCE ${cur + 1} OF ${steps.length}`;
+			prev.disabled = cur === 0;
+			next.disabled = cur === steps.length - 1;
+			const v = viewedSet(el.dataset.id!);
+			v.add(cur);
+			ss.set(viewedKey(el.dataset.id!), JSON.stringify([...v]));
+			updateGate(el);
+		};
+		prev.addEventListener('click', () => show(cur - 1));
+		next.addEventListener('click', () => show(cur + 1));
+		(el as any)._showStep = show;
+	});
+
+	// ---- Accordion, evidence toggles, multi-select limits ----
+	CASES.forEach((el) => {
 		const head = el.querySelector('.case-head') as HTMLButtonElement;
 		const body = el.querySelector('.case-body')!;
 		head.addEventListener('click', () => {
@@ -207,63 +305,95 @@ const md = (s: string) =>
 			const open = body.classList.toggle('hidden') === false;
 			head.setAttribute('aria-expanded', String(open));
 			el.classList.toggle('open', open);
+			if (open && (el as any)._showStep) (el as any)._showStep(0);
 		});
-		const evBtn = el.querySelector('.evidence-toggle') as HTMLButtonElement;
-		const ev = el.querySelector('.evidence')!;
-		const label = evBtn.textContent!.trim();
-		evBtn.addEventListener('click', () => {
-			const shown = ev.classList.toggle('hidden') === false;
-			evBtn.textContent = shown ? 'Hide evidence' : label;
-			if (shown) ev.scrollIntoView({ behavior: 'smooth', block: 'start' });
-		});
-
-		const form = el.querySelector('.qform') as HTMLFormElement;
-		const result = form.querySelector('.result')!;
-		const submit = form.querySelector('.submit') as HTMLButtonElement;
-		form.addEventListener('change', () => { result.textContent = ''; result.className = 'result'; });
-		form.addEventListener('submit', async (e) => {
-			e.preventDefault();
-			const fd = new FormData(form);
-			const answers = { q1: fd.get('q1'), q2: fd.get('q2'), q3: fd.get('q3') };
-			if (!answers.q1 || !answers.q2 || !answers.q3) {
-				result.textContent = 'Answer all three questions first.';
-				result.className = 'result bad';
-				return;
-			}
-			submit.disabled = true;
-			submit.textContent = 'Verifying…';
-			const id = (el as HTMLElement).dataset.id!;
-			const r = await api('submit', { method: 'POST', body: { challenge: id, answers } });
-			submit.textContent = 'Submit findings';
-			if (!r.ok) {
-				result.textContent = r.error || 'Submission failed.';
-				result.className = 'result bad';
-				const wait = r.retryAfterMs || (r.status === 429 ? 3000 : 0);
-				setTimeout(() => { submit.disabled = !(state?.isOpen); }, wait);
-				if (r.code === 'closed' || r.code === 'not_started') refresh();
-				return;
-			}
-			if (r.correct) {
-				const info = { points: POINTS_OF(id), flag: r.flag, takeaway: r.takeaway };
-				solvedMap[id] = info;
-				renderSolved(id, info);
-				if (typeof r.score === 'number') updateScore(r.score, r.solved);
-				else refresh();
-				toast(r.pointsAwarded ? `FLAG CAPTURED ✓ +${r.pointsAwarded}` : 'Already captured.');
-				el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			} else {
-				result.innerHTML = `<b>Not yet.</b> ${r.correctCount} of ${r.total} findings hold up. Re-check the evidence and try again.`;
-				result.className = 'result bad';
-				el.classList.add('shake');
-				setTimeout(() => el.classList.remove('shake'), 400);
-				setTimeout(() => { submit.disabled = !(state?.isOpen); }, r.cooldownMs || 4000);
-			}
+		const evBtn = el.querySelector('.evidence-toggle') as HTMLButtonElement | null;
+		if (evBtn) {
+			const ev = el.querySelector('.evidence')!;
+			const label = evBtn.textContent!.trim();
+			evBtn.addEventListener('click', () => {
+				const shown = ev.classList.toggle('hidden') === false;
+				evBtn.textContent = shown ? 'Hide' : label;
+			});
+		}
+		el.querySelectorAll<HTMLFieldSetElement>('fieldset[data-type="multi"]').forEach((fs) => {
+			const pick = Number(fs.dataset.pick);
+			fs.addEventListener('change', () => {
+				const boxes = [...fs.querySelectorAll<HTMLInputElement>('input')];
+				const n = boxes.filter((b) => b.checked).length;
+				boxes.forEach((b) => (b.disabled = !b.checked && n >= pick));
+			});
 		});
 	});
 
-	function POINTS_OF(id: string) {
-		return Number((document.getElementById('case-' + id) as HTMLElement).dataset.points);
+	// ---- Final submission with confirmation ----
+	const dlg = $('confirm') as HTMLDialogElement;
+	let pending: HTMLElement | null = null;
+
+	function collect(el: HTMLElement) {
+		const answers: Record<string, any> = {};
+		for (const fs of el.querySelectorAll<HTMLFieldSetElement>('.qform fieldset')) {
+			const checked = [...fs.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => i.value);
+			if (fs.dataset.type === 'multi') {
+				if (checked.length !== Number(fs.dataset.pick)) return null;
+				answers[fs.dataset.q!] = checked;
+			} else {
+				if (checked.length !== 1) return null;
+				answers[fs.dataset.q!] = checked[0];
+			}
+		}
+		return answers;
 	}
+
+	CASES.forEach((el) => {
+		const form = el.querySelector('.qform') as HTMLFormElement;
+		const result = form.querySelector('.result')!;
+		form.addEventListener('change', () => { result.textContent = ''; result.className = 'result'; });
+		form.addEventListener('submit', (e) => {
+			e.preventDefault();
+			if (!collect(el)) {
+				result.textContent = 'Answer every question before submitting.';
+				result.className = 'result bad';
+				return;
+			}
+			pending = el;
+			$('confirm-case').textContent = el.querySelector('.name')!.textContent!;
+			dlg.showModal();
+		});
+	});
+
+	$('confirm-back').addEventListener('click', () => { pending = null; dlg.close(); });
+	$('confirm-go').addEventListener('click', async () => {
+		const el = pending;
+		dlg.close();
+		pending = null;
+		if (!el) return;
+		const answers = collect(el);
+		const form = el.querySelector('.qform') as HTMLFormElement;
+		const btn = form.querySelector('.submit') as HTMLButtonElement;
+		const result = form.querySelector('.result')!;
+		btn.disabled = true;
+		btn.textContent = 'Submitting…';
+		const id = el.dataset.id!;
+		const r = await api('submit', { method: 'POST', body: { challenge: id, answers } });
+		btn.textContent = 'Submit final decision';
+		if (!r.ok) {
+			if (r.code === 'already_submitted') { await refresh(); return; }
+			result.textContent = r.error || 'Submission failed. Try again.';
+			result.className = 'result bad';
+			updateGate(el);
+			if (r.code === 'closed' || r.code === 'not_started') refresh();
+			return;
+		}
+		const info = r.passed
+			? { status: 'passed', points: r.points, flag: r.flag, takeaway: r.takeaway }
+			: { status: 'failed', points: 0 };
+		statusById[id] = info;
+		renderOutcome(el, info);
+		updateScore(r.score, r.passedCount, r.attempted);
+		toast(r.passed ? `FLAG CAPTURED ✓ +${r.points}` : 'Case closed.');
+		el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	});
 
 	setInterval(() => {
 		const ms = state?.started ? remainingMs(state.endsAt) : null;
@@ -277,70 +407,108 @@ const md = (s: string) =>
 	document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 </script>
 
-<style>
-	.hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 16px; margin-bottom: 16px; position: sticky; top: 8px; z-index: 5; backdrop-filter: blur(8px); background: rgba(15, 33, 57, 0.92); }
+<style is:global>
+	.hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 16px; margin-bottom: 8px; position: sticky; top: 8px; z-index: 5; backdrop-filter: blur(8px); background: rgba(15, 33, 57, 0.94); }
 	.hud div { display: grid; gap: 2px; }
 	.hud .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 	.hud .v b { font-size: 26px; font-weight: 800; color: var(--text); }
 	.hud .v i { font-style: normal; color: var(--dim); font-size: 14px; margin-left: 4px; }
 	#score { color: var(--cyan) !important; }
 	#timer.low { color: var(--orange) !important; }
+	.rule { text-align: center; font-size: 11px; letter-spacing: 0.18em; color: var(--orange); margin: 0 0 14px; }
 	.alert { margin-bottom: 16px; }
 	.cases { display: grid; gap: 12px; }
-	.case { border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(180deg, var(--panel), var(--bg-2)); overflow: hidden; transition: border-color 0.2s; }
+	.case { border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(180deg, var(--panel), var(--bg-2)); overflow: hidden; }
 	.case.open { border-color: var(--line-2); }
 	.case.solved { border-color: rgba(34, 197, 94, 0.45); }
+	.case.failed { border-color: rgba(248, 113, 113, 0.45); }
 	.case.locked { opacity: 0.55; }
-	.case.shake { animation: shake 0.35s; }
-	@keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 	.case-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 14px; padding: 16px; cursor: pointer; }
 	.case-head:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
 	.case .num { font-size: 22px; font-weight: 800; color: var(--cyan); width: 34px; }
 	.case.solved .num { color: var(--green); }
+	.case.failed .num { color: var(--red); }
 	.ttl { flex: 1; display: grid; gap: 2px; min-width: 0; }
 	.ttl .name { font-weight: 800; font-size: 17px; letter-spacing: 0.02em; }
 	.ttl .sub { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; }
 	.status { white-space: nowrap; }
 	.case-body { padding: 0 16px 18px; border-top: 1px solid var(--line); }
-	.brief { padding-top: 16px; display: grid; gap: 8px; }
+	.headline { margin: 16px 0 0; font-weight: 800; letter-spacing: 0.08em; color: var(--orange); font-size: 14px; }
+	.brief { padding-top: 14px; display: grid; gap: 8px; }
 	.brief p { margin: 0; font-size: 16px; }
 	.brief b { color: var(--cyan); }
-	.policy { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--orange); border-radius: 10px; background: rgba(245, 158, 11, 0.08); font-weight: 700; display: grid; gap: 4px; }
-	.policy span { font-size: 11px; letter-spacing: 0.18em; color: var(--orange); }
-	.safety { font-size: 13px; color: var(--muted); margin: 12px 0 0; padding-left: 10px; border-left: 2px solid var(--line-2); }
+	.fname { font-family: var(--mono); font-size: 14px; color: #ffd9a0; background: #06101d; border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; word-break: break-all; }
 	.actions { display: grid; gap: 10px; margin-top: 16px; }
+	.actions:empty { display: none; }
 	@media (min-width: 560px) { .actions { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); } }
-	.hint-line { font-size: 13px; color: var(--cyan); margin: 10px 0 0; }
-	.evidence { margin-top: 16px; display: grid; gap: 16px; }
-	figure { margin: 0; background: #06101d; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-	figcaption { padding: 10px 12px; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--line); }
-	figcaption .mono { color: var(--cyan); font-size: 11px; letter-spacing: 0.1em; }
+	.evidence { margin-top: 16px; display: grid; gap: 14px; }
+	.ev { background: #06101d; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+	.ev-title { padding: 9px 12px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cyan); border-bottom: 1px solid var(--line); }
+	.rec { margin: 0; padding: 6px 0; font-size: 13.5px; }
+	.rec div { display: grid; grid-template-columns: minmax(120px, 44%) 1fr; gap: 10px; padding: 6px 12px; border-bottom: 1px dashed rgba(31, 58, 92, 0.7); }
+	.rec div:last-child { border-bottom: 0; }
+	.rec dt { color: var(--muted); }
+	.rec dd { margin: 0; color: var(--text); white-space: pre-line; word-break: break-word; }
+	.rec div.grp { background: rgba(34, 211, 238, 0.05); }
+	.rec div.grp dt { color: #ffd9a0; }
+	.rec div.ind dt { padding-left: 14px; }
+	.tree { margin: 0; padding: 12px; font-size: 14px; line-height: 1.6; color: var(--text); overflow-x: auto; }
+	.hex { padding: 10px 12px; font-size: 12.5px; overflow-x: auto; }
+	.hrow { display: flex; gap: 14px; white-space: pre; line-height: 1.7; }
+	.hrow .off { color: var(--dim); }
+	.hrow .hx { color: var(--text); }
+	.hrow .asc { color: #ffd9a0; }
 	.shot { display: block; position: relative; background: #fff; }
-	.shot img { display: block; width: 100%; height: auto; min-height: 80px; }
+	.shot img { display: block; width: 100%; height: auto; }
 	.zoom { position: absolute; right: 8px; bottom: 8px; font-size: 11px; background: rgba(7, 17, 31, 0.85); color: var(--cyan); padding: 4px 8px; border-radius: 6px; }
-	.notes { margin: 0; padding: 10px 12px 12px 28px; font-size: 14px; color: var(--muted); display: grid; gap: 4px; }
+	.step-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+	.step-label { font-size: 12px; letter-spacing: 0.12em; color: var(--cyan); }
+	.ev-policy .policy-text, .policy { white-space: pre-line; }
+	.ev-policy .policy-text { margin: 0; padding: 12px; font-weight: 700; }
+	.ev-policy { border-color: var(--orange); }
+	.ev-policy .ev-title { color: var(--orange); }
+	.policy { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--orange); border-radius: 10px; background: rgba(245, 158, 11, 0.08); font-weight: 700; display: grid; gap: 4px; }
+	.policy span { font-size: 11px; letter-spacing: 0.18em; color: var(--orange); font-weight: 400; }
 	.qform { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line-2); }
 	fieldset { border: 0; padding: 0; margin: 12px 0 18px; }
 	legend { font-weight: 700; font-size: 16px; margin-bottom: 10px; padding: 0; }
 	.qn { color: var(--cyan); font-size: 13px; margin-right: 4px; }
+	.pickhint { color: var(--orange); font-size: 12px; font-weight: 400; }
 	.opts { display: grid; gap: 8px; }
 	.opts.yn { grid-template-columns: 1fr 1fr; }
+	.opts.dec { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 	.opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg); cursor: pointer; font-size: 15px; min-height: 48px; }
-	.opt.mono span { font-family: var(--mono); font-size: 14px; }
+	.opt.mono span { font-family: var(--mono); font-size: 14px; font-weight: 700; }
 	.opt input { accent-color: var(--cyan); width: 18px; height: 18px; margin: 2px 0 0; flex: none; }
 	.opt:has(input:checked) { border-color: var(--cyan); background: var(--cyan-dim); }
-	.result { min-height: 0; font-size: 14px; margin-bottom: 12px; }
+	.opt:has(input:disabled:not(:checked)) { opacity: 0.5; }
+	.gate { font-size: 12px; color: var(--orange); text-align: center; margin: 0 0 10px; }
+	.result { font-size: 14px; margin-bottom: 12px; }
 	.result.bad { color: var(--red); padding: 10px 12px; background: var(--red-dim); border-radius: 8px; }
-	.captured { margin-top: 16px; padding: 16px; border-radius: 10px; border: 1px solid rgba(34, 197, 94, 0.5); background: var(--green-dim); text-align: center; }
+	.outcome { margin-top: 16px; padding: 16px; border-radius: 10px; text-align: center; }
+	.outcome.captured { border: 1px solid rgba(34, 197, 94, 0.5); background: var(--green-dim); }
 	.cap-title { font-weight: 900; letter-spacing: 0.12em; color: var(--green); font-size: 18px; }
 	.cap-flag { font-size: 16px; margin: 8px 0 4px; }
 	.cap-pts { color: var(--green); font-weight: 800; }
-	.cap-take { margin: 10px 0 0; font-style: italic; color: var(--text); }
-	.finish { text-align: center; margin-bottom: 16px; border-color: rgba(34, 197, 94, 0.55); }
-	.finish .big { font-size: 48px; font-weight: 900; color: var(--green); margin: 6px 0; }
+	.cap-take { margin: 10px 0 0; font-style: italic; }
+	.outcome.closed { border: 1px solid rgba(248, 113, 113, 0.5); background: var(--red-dim); }
+	.cl-title { font-weight: 900; letter-spacing: 0.12em; color: var(--red); font-size: 20px; }
+	.cl-sub { margin: 6px 0; font-weight: 700; }
+	.cl-pts { color: var(--red); font-weight: 800; font-size: 18px; }
+	.cl-note { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+	.finish { text-align: center; margin-bottom: 16px; }
+	.finish.perfect { border-color: rgba(34, 197, 94, 0.55); }
+	.finish .big { font-size: 46px; font-weight: 900; color: var(--cyan); margin: 6px 0; }
+	.finish.perfect .big { color: var(--green); }
 	.finish h2 { font-size: 22px; letter-spacing: 0.04em; }
 	.finish .lead { font-size: 17px; margin: 10px 0 4px; }
-	.finish .muted { margin: 0 0 14px; }
+	.finish .muted { margin: 0; }
+	#confirm { background: var(--bg-2); color: var(--text); border: 1px solid var(--orange); border-radius: var(--r); width: min(440px, calc(100vw - 32px)); padding: 0; }
+	#confirm::backdrop { background: rgba(0, 0, 0, 0.7); }
+	.dlg { padding: 22px; }
+	.dlg h2 { font-size: 24px; letter-spacing: 0.06em; color: var(--orange); }
+	.dlg-case { color: var(--cyan); font-size: 13px; margin: 8px 0 0; }
+	.dlg-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 	.foot { text-align: center; font-size: 13px; margin-top: 24px; }
-	@media (max-width: 380px) { .hud .v b { font-size: 21px; } .case .status { font-size: 10px; padding: 3px 7px; } }
+	@media (max-width: 380px) { .hud .v b { font-size: 21px; } .case .status { font-size: 10px; padding: 3px 7px; } .rec div { grid-template-columns: 1fr; gap: 2px; } }
 </style>

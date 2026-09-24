@@ -2,11 +2,15 @@
 import CtfLayout from '../../layouts/CtfLayout.astro';
 import { CHALLENGES } from '../../../ctf-lib/content.js';
 const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
+const caseMeta = CHALLENGES.map((c: any) => ({ id: c.id, num: c.num, title: c.title, points: c.points }));
+// Option texts are public content (not the answer key); used to show submitted answers readably.
+const optText: Record<string, string> = {};
+for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o of q.options) optText[c.id + ':' + o.id] = o.text;
 ---
 
 <CtfLayout title="Admin · NMT SOC Challenge" wide>
 	<div class="topbar">
-		<span class="brand"><span class="dot"></span>NMT SOC Challenge · Presenter console</span>
+		<span class="brand"><span class="dot"></span>NMT SOC Challenge · Presenter console <span id="envpill" class="pill"></span></span>
 		<span>
 			<a href="/ctf/leaderboard" target="_blank" rel="noopener">Open leaderboard ↗</a>
 			<button id="logout" class="btn ghost sm hidden" type="button">Log out</button>
@@ -69,7 +73,7 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 			<div class="tile"><span class="k">Analysts</span><span class="v mono" id="s-an">0</span></div>
 			<div class="tile"><span class="k">Submissions</span><span class="v mono" id="s-sub">0</span></div>
 			<div class="tile"><span class="k">Solves</span><span class="v mono" id="s-sol">0</span></div>
-			<div class="tile"><span class="k">Case solves</span><span class="v mono small-v" id="s-prog"></span></div>
+			<div class="tile"><span class="k">Cases passed / attempted</span><span class="v mono small-v" id="s-prog"></span></div>
 		</div>
 
 		<div class="card">
@@ -80,7 +84,7 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 			<div class="tbl-wrap">
 				<table>
 					<thead>
-						<tr><th>#</th><th>Full name</th><th>Email</th><th>Handle</th><th class="num">Score</th><th class="num">Solved</th><th class="num">Attempts</th><th>Score reached</th><th>Last activity</th></tr>
+						<tr><th>#</th><th>Full name</th><th>Email</th><th>Handle</th><th class="num">Score</th><th class="num">Passed</th><th>Cases 1–5</th><th>Score reached</th><th>Last activity</th></tr>
 					</thead>
 					<tbody id="people"></tbody>
 				</table>
@@ -111,13 +115,17 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 	</dialog>
 </CtfLayout>
 
-<script define:vars={{ titles }}>
+<script define:vars={{ titles, caseMeta, optText }}>
 	window.__CTF_TITLES = titles;
+	window.__CTF_CASES = caseMeta;
+	window.__CTF_OPT = optText;
 </script>
 
 <script>
 	import { api, syncClock, remainingMs, fmtClock, toast, esc } from '../../scripts/ctf-client.js';
 	const TITLES: Record<string, string> = (window as any).__CTF_TITLES;
+	const CASEM: any[] = (window as any).__CTF_CASES;
+	const OPT: Record<string, string> = (window as any).__CTF_OPT;
 	const $ = (id: string) => document.getElementById(id)!;
 	let state: any = null;
 	let people: any[] = [];
@@ -163,7 +171,7 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 		$('s-an').textContent = r.stats.analysts;
 		$('s-sub').textContent = r.stats.submissions;
 		$('s-sol').textContent = r.stats.solves;
-		$('s-prog').innerHTML = r.progress.map((p: any) => `${esc(p.title)}: <b>${p.solved}</b>`).join('<br>');
+		$('s-prog').innerHTML = r.progress.map((p: any) => `${esc(p.title)}: <b>${p.solved}</b> / ${p.attempted}`).join('<br>');
 		people = r.participants;
 		renderPeople();
 	}
@@ -174,7 +182,7 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 		$('people').innerHTML = list.length
 			? list
 					.map(
-						(p) => `<tr data-id="${p.id}" class="${p.is_hidden ? 'hid' : ''}"><td class="mono">${p.rank ?? '—'}</td><td>${esc(p.full_name)}</td><td class="mono sm">${esc(p.email)}</td><td class="mono"><b>${esc(p.handle)}</b>${p.is_hidden ? ' <span class="pill bad">hidden</span>' : ''}</td><td class="num mono">${p.score}</td><td class="num mono">${p.solved}/4</td><td class="num mono">${p.attempts}</td><td class="mono sm">${fmtT(p.last_solve_at)}</td><td class="mono sm">${fmtT(p.last_activity_at)}</td></tr>`
+						(p) => `<tr data-id="${p.id}" class="${p.is_hidden ? 'hid' : ''}"><td class="mono">${p.rank ?? '—'}</td><td>${esc(p.full_name)}</td><td class="mono sm">${esc(p.email)}</td><td class="mono"><b>${esc(p.handle)}</b>${p.is_hidden ? ' <span class="pill bad">hidden</span>' : ''}</td><td class="num mono">${p.score}</td><td class="num mono">${p.solved}/${CASEM.length}</td><td class="mono cases-cell">${CASEM.map((c) => { const v = p.cases?.[c.id]; return v === 'P' ? '<span class="cp">✓</span>' : v === 'F' ? '<span class="cf">✗</span>' : '<span class="cn">·</span>'; }).join('')}</td><td class="mono sm">${fmtT(p.last_solve_at)}</td><td class="mono sm">${fmtT(p.last_activity_at)}</td></tr>`
 					)
 					.join('')
 			: '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No participants yet.</td></tr>';
@@ -203,7 +211,7 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 			if (a === 'close' && !confirm('Close submissions now?')) return;
 			if (a === 'reveal' && !confirm('Reveal final results on the public leaderboard?')) return;
 			if (a === 'reset_scores' || a === 'reset_all') {
-				const msg = a === 'reset_all' ? 'This deletes ALL participants, submissions and scores.' : 'This deletes all submissions and scores but keeps registrations.';
+				const msg = a === 'reset_all' ? 'This deletes ALL participants, submissions and scores.' : 'This deletes every final submission and score but keeps registrations. Students can then submit again.';
 				const c = prompt(msg + '\nType RESET to confirm.');
 				if (c !== 'RESET') return;
 				return act(a, { confirm: 'RESET' });
@@ -232,10 +240,16 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 		($('d-handle') as HTMLInputElement).value = p.handle;
 		$('d-hide').textContent = p.is_hidden ? 'Show on public leaderboard' : 'Hide from public leaderboard';
 		$('d-link').classList.add('hidden');
-		const solves = r.solves.map((s: any) => `<li><b>${esc(TITLES[s.challenge_id])}</b> +${s.points} at <span class="mono">${fmtT(s.solved_at)}</span></li>`).join('') || '<li class="muted">None</li>';
-		const subs = r.submissions
-			.map((s: any) => `<tr><td class="mono sm">${fmtT(s.created_at)}</td><td>${esc(TITLES[s.challenge_id])}</td><td class="mono">${esc(Object.entries(s.answers).map(([k, v]) => k + '=' + v).join(' '))}</td><td>${s.is_correct ? '<span class="pill ok">correct</span>' : '<span class="pill bad">incorrect</span>'}</td><td class="num mono">${s.points_awarded}</td></tr>`)
-			.join('');
+		const byCase = Object.fromEntries(r.attempts.map((a: any) => [a.challenge_id, a]));
+		const readable = (cid: string, answers: any) =>
+			Object.entries(answers)
+				.map(([q, v]) => `<div><span class="qk">${esc(q.toUpperCase())}</span> ${(Array.isArray(v) ? v : [v]).map((x) => esc(OPT[cid + ':' + x] || String(x))).join(' <b>+</b> ')}</div>`)
+				.join('');
+		const rows = CASEM.map((c) => {
+			const a = byCase[c.id];
+			const status = !a ? '<span class="pill">Not attempted</span>' : a.passed ? '<span class="pill ok">Passed</span>' : '<span class="pill bad">Failed</span>';
+			return `<tr><td class="mono">${c.num}</td><td>${esc(c.title)}</td><td>${status}</td><td class="num mono">${a ? a.points : 0} / ${c.points}</td><td class="ans">${a ? readable(c.id, a.answers) : '—'}</td><td class="mono sm">${a ? new Date(a.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</td></tr>`;
+		}).join('');
 		$('d-body').innerHTML = `
 			<div class="dgrid">
 				<div><span class="k">Email</span><span class="mono">${esc(p.email)}</span></div>
@@ -243,9 +257,8 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 				<div><span class="k">Last activity</span><span class="mono">${new Date(p.last_activity_at).toLocaleString()}</span></div>
 				<div><span class="k">Total score</span><span class="mono"><b>${r.score}</b> / 100</span></div>
 			</div>
-			<p class="eyebrow" style="margin-top:16px">Solves</p><ul class="solves">${solves}</ul>
-			<p class="eyebrow" style="margin-top:16px">Attempts (${r.submissions.length})</p>
-			<div class="tbl-wrap"><table><thead><tr><th>Time</th><th>Case</th><th>Answers</th><th>Result</th><th class="num">Pts</th></tr></thead><tbody>${subs || '<tr><td colspan="5" class="muted">No attempts</td></tr>'}</tbody></table></div>`;
+			<p class="eyebrow" style="margin-top:16px">Final submissions (one per case)</p>
+			<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Case</th><th>Status</th><th class="num">Points</th><th>Submitted answers</th><th>Submitted</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 		if (!dlg.open) dlg.showModal();
 	}
 	$('d-rename').addEventListener('click', async () => {
@@ -270,6 +283,12 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 		if (r.ok) dlg.close();
 	});
 
+	{
+		const prev = /\.irfanblog\.pages\.dev$/.test(location.hostname); // branch/hash preview URLs
+		const el = $('envpill');
+		el.textContent = prev ? 'PREVIEW · test database' : 'PRODUCTION · live event database';
+		el.className = 'pill ' + (prev ? 'warn' : 'ok');
+	}
 	boot();
 </script>
 
@@ -310,7 +329,10 @@ const titles = Object.fromEntries(CHALLENGES.map((c) => [c.id, c.title]));
 	.dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 	.dgrid div { display: grid; gap: 2px; }
 	.dgrid .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-	.solves { margin: 6px 0 0; padding-left: 20px; }
+	.cases-cell span { display: inline-block; width: 16px; text-align: center; font-weight: 800; }
+	.cp { color: var(--green); } .cf { color: var(--red); } .cn { color: var(--dim); }
+	td.ans { font-size: 12.5px; max-width: 420px; }
+	td.ans .qk { font-family: var(--mono); color: var(--cyan); font-size: 11px; margin-right: 4px; }
 	.dlg-actions { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 8px; }
 	.dlg-actions .ctl { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 	#d-link { margin-top: 12px; word-break: break-all; font-size: 13px; }

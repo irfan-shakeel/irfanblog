@@ -1,92 +1,116 @@
-# NMT SOC Decision Challenge: Runbook
+# NMT SOC Decision Challenge: Runbook (V2)
 
-**Can You Trust This File?** OPSWAT Academy × New Mexico Tech. 4 cases · 20 minutes · 100 points.
+**Can You Trust This File?** OPSWAT Academy × New Mexico Tech.
+**5 cases · 20 minutes · 100 points · ONE final submission per case.**
 
 | What | URL |
 |---|---|
 | Student entry (QR target) | https://irfanshakeel.com/ctf |
 | Projected leaderboard | https://irfanshakeel.com/ctf/leaderboard |
 | Presenter console | https://irfanshakeel.com/ctf/admin |
+| Preview (testing only) | https://ctf-v2.irfanblog.pages.dev/ctf |
 
-The QR code (`public/ctf/qr.svg`, also shown in the leaderboard header) points to `https://irfanshakeel.com/ctf`.
+## ⚠️ Preview and production use DIFFERENT databases
 
-## Architecture
+| Environment | URL | D1 database |
+|---|---|---|
+| **Production** | irfanshakeel.com, irfanblog.pages.dev | `nmt-ctf` (**live event data**) |
+| **Preview** | `*.irfanblog.pages.dev` branch/hash URLs | `nmt-ctf-preview` (test data) |
 
-- The Astro site stays a static build. `/ctf/*` pages are static HTML plus small client scripts.
-- The API is in Cloudflare Pages Functions under `functions/api/ctf/*`. Shared code is in `ctf-lib/`.
-- The database is D1 `nmt-ctf`, bound as `CTF_DB` (see `wrangler.toml`). The schema is in `migrations/`.
-- Preview and production share the same D1 database. **Always reset after testing.**
-- Secrets are Pages env vars (secret_text) on both the preview and production environments. They are never committed:
-  `CTF_ADMIN_PASSWORD`, `CTF_SESSION_SECRET`, `CTF_ANSWER_KEY` (JSON), `CTF_FLAG_IMPOSTOR`, `CTF_FLAG_BOX`, `CTF_FLAG_GREEN`, `CTF_FLAG_DLP`.
-- Scoring, answer checking and flag reveal all happen server-side. The public API returns handles only.
+- The admin console shows a badge: **PRODUCTION · live event database** or **PREVIEW · test database**. Check it before you press anything.
+- The preview admin password is not the production one. Both live in Cloudflare secrets.
+- `scripts/ctf-sim.mjs` **fully resets** whatever `BASE` you point it at. Never run it against production during or after the event unless you intend to wipe it.
 
-## Admin setup
+## Cases
 
-1. Open `/ctf/admin` and log in with `CTF_ADMIN_PASSWORD`. The session lasts 12 hours.
-2. To change the password: Cloudflare dashboard → Workers & Pages → irfanblog → Settings → Variables and Secrets → edit `CTF_ADMIN_PASSWORD` (Production). Changes apply on the next deployment. Use Deployments → Retry deployment to apply immediately.
+| # | Case | Points | Target time | Evidence |
+|---|---|---:|---:|---|
+| 01 | WHO ARE YOU REALLY? | 10 | 2 min | Downloadable suspect file + built-in raw byte view |
+| 02 | GREEN BUT BLIND | 15 | 3 min | Analysis record + import policy |
+| 03 | CLEAN, BUT CAPABLE | 20 | 4 min | Sample PDF, optional FileScan.IO, local evidence (real FileScan screenshots + PDF structure) + policy |
+| 04 | SAFE FOR WHICH OBJECTIVE? | 20 | 4 min | Downloadable synthetic export + scan report + data-transfer policy |
+| 05 | THE FINAL BOUNDARY | 35 | 7 min | 4-step progressive evidence; all 4 must be viewed before submitting |
 
-## Reset procedure
+The answer key and flags live only in Cloudflare secrets. The instructor answer sheet is kept locally in `_ctf_source/` and is never committed.
 
-- **Reset scores (keep registrations):** clears submissions, solves and the timer, and keeps students registered. Use it if you start too early.
-- **RESET EVENT (delete everything):** deletes all participants, submissions and scores, and invalidates every student session.
-- Both require typing `RESET`. **After a reset, confirm the console shows 0 analysts and "Not started" before showing the QR.**
+## Scoring model
+
+- Students can change answers freely until they press **SUBMIT FINAL DECISION** and confirm.
+- All answers correct: the student gets the full case points, and the flag and takeaway are revealed.
+- Any answer wrong: **CASE CLOSED**, 0 points, locked permanently. Nothing tells them which answer was wrong.
+- Refreshing, logging in on another device or using a re-entry link never unlocks a case.
+- Leaderboard ranking: score, then cases passed, then the time the current score was reached (earlier wins).
+- A malformed submission (unanswered question, wrong number of picks) is rejected **without** using up the attempt.
+- **There is no "retry" button.** Resetting a single student is intentionally not possible during the event.
 
 ## Event-day checklist
 
-**Before the session (T-30 min)**
-1. Open `/ctf/admin` on the presenter laptop and confirm the state shows "Not started (closed)".
-2. On your phone, scan the QR and register a dummy analyst (e.g. `TestAnalyst`).
-3. In admin, click **START CHALLENGE**. On the phone, solve all 4 cases (wrong answer once to see the retry and cooldown).
-4. Open `/ctf/leaderboard` on the projector. Check that it updates within about 3 seconds, the top 3 are highlighted and the timer runs.
-5. Tap **OPEN FILESCAN.IO** (it opens in a new tab) and **VIEW FALLBACK EVIDENCE**.
-6. Try **Freeze**, **Close**, **Reveal**, **Export CSV**.
-7. Click **RESET EVENT** and type `RESET`. Confirm 0 analysts and Not started.
-8. Put the leaderboard on the projector (browser full screen, F11).
+**Before the event (T-30 min)**
+1. Open `/ctf/admin` on the presenter laptop and confirm the badge says **PRODUCTION** and the state is "Not started".
+2. On your phone, scan the QR and register a dummy analyst.
+3. Click **START CHALLENGE** and confirm each case opens:
+   - Case 01 downloads the file and INSPECT RAW shows the bytes.
+   - Case 03 opens FileScan.IO and the local evidence shows 3 screenshots, the PDF structure and the policy.
+   - Case 05 steps through all 4 evidence cards.
+4. Submit **one case wrong** and confirm it shows CASE CLOSED and stays closed after a refresh.
+5. Submit **one case right** and confirm FLAG CAPTURED and the score.
+6. Open `/ctf/leaderboard` on the projector and confirm it updates.
+7. **RESET EVENT**, type `RESET`, and confirm **0 analysts** and "Not started".
 
 **Start**
-1. Show the QR (on the leaderboard header, or the slide).
-2. Students register. Watch the "Analysts" counter reach about 30.
-3. Click **START CHALLENGE** (default 20 minutes). Cases unlock automatically on student screens within about 8 seconds.
+1. Show the QR. Students register.
+2. At about 30 analysts, click **START CHALLENGE** (20 minutes).
+
+**During**
+- Students investigate independently. Clarify the wording of a question only.
+- Never confirm or deny whether an individual answer is right.
 
 **Final ~2 minutes**
-1. Click **FREEZE LEADERBOARD**. Say: *"Leaderboard is frozen. Your submissions still count."*
+- **FREEZE LEADERBOARD**. Say: *"Leaderboard is frozen. Your submissions still count."*
 
 **Finish**
-1. When the timer hits 00:00, click **CLOSE SUBMISSIONS**. The timer never closes submissions on its own.
-2. Check the top 3 privately in the admin table (rank, full name, email).
-3. Click **REVEAL FINAL RESULTS**. The podium appears on the projector.
-4. Announce the winners and debrief the four cases.
-5. Click **EXPORT CSV** (participants, and all submissions) for your records.
+1. At 00:00, click **CLOSE SUBMISSIONS**. The timer does not close them for you.
+2. Check the top 3 privately in the admin table (the ✓/✗ per case column, and click a row for answers).
+3. **REVEAL FINAL RESULTS**. Announce the winners.
+4. Debrief the correct reasoning for each case.
 
-## Fallback procedures
+**After the event**
+1. **Export CSV** (participants, and all submissions).
+2. **RESET EVENT** to delete student personal data.
+3. Delete the Cloudflare API token (My Profile → API Tokens) and `.cloudflare.env`.
+
+## Fallbacks
 
 | Problem | Action |
 |---|---|
-| FileScan.IO slow or down | Tell students to use **VIEW FALLBACK EVIDENCE** in Case 03. It contains everything needed. |
-| Weak Wi-Fi | Every case works from small hosted screenshots. Students can use mobile data. |
-| Student lost their session (new phone, cleared browser) | Admin → click the student → **Generate re-entry link**. It is copied to your clipboard; send or show it. It works once and keeps their score. |
-| Duplicate or inappropriate handle | Admin → student → **Rename handle**, or **Hide from public leaderboard**. |
-| Need more time | Admin → **+1 min** (repeat as needed). |
-| Started too early | **Reset scores (keep registrations)**, then **START** again. |
-| Admin locked out after wrong passwords | Wait 5 minutes (10 failed attempts per 5 min per network). |
+| FileScan.IO slow or down | Case 03 is fully solvable from **VIEW LOCAL EVIDENCE**. |
+| Weak Wi-Fi | All evidence is small and hosted locally; mobile data works. |
+| Student lost their session | Admin → student → **Generate re-entry link** (single use). Their locked or passed cases carry over. |
+| Inappropriate handle | Admin → student → **Rename handle** or **Hide from public leaderboard**. |
+| Need more time | Admin → **+1 min**. |
+| Started too early, before anyone submitted | **Reset scores (keep registrations)**, then **START** again. This clears every final submission. |
+
+## Architecture notes
+
+- The static Astro site is unchanged. `/ctf/*` is static HTML plus client scripts.
+- The API is in `functions/api/ctf/*`. `functions/ctf-v2/artifacts/[name].js` serves the challenge files as forced downloads (`application/octet-stream`, attachment).
+- Schema: `migrations/0001_init.sql` and `migrations/0002_one_attempt.sql` (the `attempts` table, one row per participant per case).
+- **Public:** `ctf-lib/content.js` (question text and random option ids).
+- **Server-only, but not secret:** `ctf-lib/server-content.js` (takeaways).
+- **Secrets, per environment:** `CTF_ADMIN_PASSWORD`, `CTF_SESSION_SECRET`, `CTF_ANSWER_KEY`, `CTF_FLAG_IDENTITY`, `CTF_FLAG_BLIND`, `CTF_FLAG_CAPABLE`, `CTF_FLAG_OBJECTIVE`, `CTF_FLAG_BOUNDARY`.
+
+## Safety
+
+- Artifacts are benign:
+  - `mesa-maintenance-notice.pdf` is plain text with a .pdf name.
+  - `vendor-maintenance-brief.pdf` is a 1-page PDF with one embedded 33-byte `gateway.ini`. It has no JavaScript, actions, URIs or launch entries. FileScan.IO gives it a score of 0.00, 0 AV engines and the verdict Undetermined.
+  - `research-access-export.txt` contains synthetic values only (test card 4111…, SSN 123-45-6789, IP 192.0.2.45 from the documentation range).
+- No EICAR files, ZIPs or instructor package files are hosted. Cases 02 and 05 are evidence-only.
 
 ## Local development
 
 ```
-cp .dev.vars.example .dev.vars   # local-only secrets (gitignored)
-npm run ctf:dev                  # build + local D1 + wrangler pages dev on :8788
-npm run ctf:sim                  # 30-student simulation (FULL RESET of the target!)
+cp .dev.vars.example .dev.vars          # local secrets (gitignored)
+npm run ctf:dev                         # build + local D1 + wrangler pages dev on :8788
+npm run ctf:sim                         # 30-student simulation (FULL RESET of target)
 ```
-
-`BASE=<url> ADMIN=<password> KEY='<answer key json>' node scripts/ctf-sim.mjs` runs the simulation against a deployment. **It resets the event before and after.**
-
-## Safety
-
-- Only two safe artifacts are hosted: `02-nmt-safe-baseline-renamed.pdf` (plain text) and `05-nmt-maintenance-javascript.pdf` (its JavaScript only calls `app.alert`).
-- No EICAR files, ZIPs or instructor package contents are hosted. Case 02 uses screenshots only.
-
-## After the event
-
-1. Export the CSVs, then **RESET EVENT** to delete personal data.
-2. Delete the Cloudflare API token (My Profile → API Tokens).
-3. Optionally delete the D1 database `nmt-ctf` and the `CTF_*` variables, and remove `/ctf` from the site.

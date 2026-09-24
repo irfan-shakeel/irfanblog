@@ -7,6 +7,12 @@ const esc = (v) => {
 	return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 const csv = (rows) => rows.map((r) => r.map(esc).join(',')).join('\r\n') + '\r\n';
+const OPT = {};
+for (const c of CHALLENGES) for (const q of c.questions) for (const o of q.options) OPT[c.id + ':' + o.id] = o.text;
+const readable = (cid, answers) =>
+	Object.entries(answers)
+		.map(([q, v]) => `${q}: ${(Array.isArray(v) ? v : [v]).map((x) => OPT[cid + ':' + x] || x).join(' + ')}`)
+		.join(' | ');
 
 export const onRequestGet = handle(async ({ request, env }) => {
 	await requireAdmin(env, request);
@@ -16,37 +22,43 @@ export const onRequestGet = handle(async ({ request, env }) => {
 	let body;
 	if (type === 'submissions') {
 		const r = await db
-			.prepare(`SELECT x.id, p.handle, p.full_name, p.email, x.challenge_id, x.answers_json, x.is_correct, x.points_awarded, x.created_at
-			            FROM submissions x JOIN participants p ON p.id = x.participant_id ORDER BY x.id`)
+			.prepare(`SELECT p.handle, p.full_name, p.email, a.challenge_id, a.answers_json, a.passed, a.points_awarded, a.submitted_at
+			            FROM attempts a JOIN participants p ON p.id = a.participant_id ORDER BY a.submitted_at`)
 			.all();
-		body = csv([['submission_id', 'handle', 'full_name', 'email', 'challenge', 'answers', 'correct', 'points_awarded', 'submitted_at'], ...r.results.map((s) => [s.id, s.handle, s.full_name, s.email, s.challenge_id, s.answers_json, s.is_correct, s.points_awarded, s.created_at])]);
+		body = csv([
+			['handle', 'full_name', 'email', 'case', 'result', 'points', 'answers', 'submitted_at'],
+			...r.results.map((s) => [s.handle, s.full_name, s.email, s.challenge_id, s.passed ? 'passed' : 'failed', s.points_awarded, readable(s.challenge_id, JSON.parse(s.answers_json)), s.submitted_at]),
+		]);
 	} else {
 		const board = await computeBoard(env, { includeHidden: true });
 		const rank = Object.fromEntries(board.all.map((r) => [r.id, r.rank]));
-		const [people, solves] = await db.batch([
+		const [people, attempts] = await db.batch([
 			db.prepare('SELECT id, full_name, email, handle, is_hidden, created_at, last_activity_at FROM participants'),
-			db.prepare('SELECT participant_id, challenge_id, points, solved_at FROM solves'),
+			db.prepare('SELECT participant_id, challenge_id, passed, points_awarded, submitted_at FROM attempts'),
 		]);
-		const sv = {};
-		for (const s of solves.results) (sv[s.participant_id] ||= {})[s.challenge_id] = s;
+		const by = {};
+		for (const a of attempts.results) (by[a.participant_id] ||= {})[a.challenge_id] = a;
 		const rows = people.results
 			.map((p) => {
-				const mine = sv[p.id] || {};
-				const score = Object.values(mine).reduce((a, s) => a + s.points, 0);
-				const last = Object.values(mine).map((s) => s.solved_at).sort().pop() || '';
-				return { p, mine, score, last, rank: rank[p.id] };
+				const mine = by[p.id] || {};
+				const vals = Object.values(mine);
+				return {
+					p, mine, rank: rank[p.id],
+					score: vals.reduce((t, a) => t + a.points_awarded, 0),
+					passed: vals.filter((a) => a.passed).length,
+					reached: vals.filter((a) => a.passed).map((a) => a.submitted_at).sort().pop() || '',
+				};
 			})
 			.sort((a, b) => a.rank - b.rank);
 		body = csv([
-			['rank_incl_hidden', 'handle', 'full_name', 'email', 'score', 'solved', 'hidden', 'registered_at', 'last_activity_at', 'score_reached_at', ...CHALLENGES.map((c) => c.id + '_solved_at')],
-			...rows.map(({ p, mine, score, last, rank }) => [rank, p.handle, p.full_name, p.email, score, Object.keys(mine).length, p.is_hidden ? 'yes' : 'no', p.created_at, p.last_activity_at, last, ...CHALLENGES.map((c) => mine[c.id]?.solved_at || '')]),
+			['rank_incl_hidden', 'handle', 'full_name', 'email', 'score', 'passed', 'attempted', 'hidden', 'registered_at', 'last_activity_at', 'score_reached_at', ...CHALLENGES.flatMap((c) => [c.id + '_result', c.id + '_points', c.id + '_submitted_at'])],
+			...rows.map(({ p, mine, rank, score, passed, reached }) => [
+				rank, p.handle, p.full_name, p.email, score, passed, Object.keys(mine).length, p.is_hidden ? 'yes' : 'no', p.created_at, p.last_activity_at, reached,
+				...CHALLENGES.flatMap((c) => { const a = mine[c.id]; return a ? [a.passed ? 'passed' : 'failed', a.points_awarded, a.submitted_at] : ['not attempted', 0, '']; }),
+			]),
 		]);
 	}
 	return new Response(body, {
-		headers: {
-			'content-type': 'text/csv; charset=utf-8',
-			'content-disposition': `attachment; filename="nmt-ctf-${type}-${stamp}.csv"`,
-			'cache-control': 'no-store',
-		},
+		headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="nmt-ctf-${type}-${stamp}.csv"`, 'cache-control': 'no-store' },
 	});
 });

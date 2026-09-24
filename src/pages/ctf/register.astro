@@ -16,7 +16,7 @@ import { EVENT } from '../../../ctf-lib/content.js';
 
 		<div id="resume-bad" class="alert bad hidden">That re-entry link has expired or was already used. Ask the instructor for a new one.</div>
 
-		<form id="reg" class="card" novalidate>
+		<form id="reg" class="card" method="post" action="/api/ctf/register" novalidate>
 			<div class="field" data-f="fullName">
 				<label for="fullName">Full name</label>
 				<input id="fullName" name="fullName" autocomplete="name" maxlength="80" placeholder="Jane Doe" required />
@@ -50,7 +50,7 @@ import { EVENT } from '../../../ctf-lib/content.js';
 			<ol>
 				<li><span>01</span> Inspect the evidence</li>
 				<li><span>02</span> Decide what matters</li>
-				<li><span>03</span> Submit your findings</li>
+				<li><span>03</span> Submit one final decision</li>
 				<li><span>04</span> Capture the flag</li>
 				<li><span>05</span> Watch your score climb</li>
 			</ol>
@@ -72,9 +72,9 @@ import { EVENT } from '../../../ctf-lib/content.js';
 
 	if (new URLSearchParams(location.search).get('resume') === 'invalid') $('resume-bad').classList.remove('hidden');
 
-	(async () => {
-const me = await api('me');
-	if (me.ok && me.registered) showMission(me.handle);
+	// Check for an existing session in the background; the form handler is attached synchronously
+	// below so a fast tap can never fall through to a native form submission.
+	api('me').then((me) => { if (me.ok && me.registered) showMission(me.handle); });
 
 	const form = $('reg') as HTMLFormElement;
 	const clearErrors = () => {
@@ -110,7 +110,6 @@ const me = await api('me');
 		$('formerr').textContent = r.error || 'Registration failed.';
 		$('formerr').classList.remove('hidden');
 	});
-})();
 </script>
 
 <style>

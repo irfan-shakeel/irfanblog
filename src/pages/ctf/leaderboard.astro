@@ -28,7 +28,7 @@ import CtfLayout from '../../layouts/CtfLayout.astro';
 		<section class="board card">
 			<table>
 				<thead>
-					<tr><th class="c-rank">Rank</th><th>Analyst</th><th class="num">Score</th><th class="num">Solved</th></tr>
+					<tr><th class="c-rank">Rank</th><th>Analyst</th><th class="num">Score</th><th class="num">Passed</th></tr>
 				</thead>
 				<tbody id="rows">
 					<tr><td colspan="4" class="empty">Waiting for analysts…</td></tr>
@@ -45,12 +45,12 @@ import CtfLayout from '../../layouts/CtfLayout.astro';
 			</div>
 
 			<div class="card progress">
-				<p class="eyebrow">Case progress</p>
+				<p class="eyebrow">Cases passed</p>
 				<div id="progress"></div>
 			</div>
 
 			<div class="card latest">
-				<p class="eyebrow">Latest captures</p>
+				<p class="eyebrow">Latest flags captured</p>
 				<ul id="latest"><li class="muted">No captures yet.</li></ul>
 			</div>
 		</aside>
@@ -92,13 +92,13 @@ import CtfLayout from '../../layouts/CtfLayout.astro';
 		if (mode === 'final' && L.length) {
 			const order = [1, 0, 2].filter((i) => L[i]);
 			pod.innerHTML = order
-				.map((i) => `<div class="pd pd-${i + 1}"><div class="medal">${MEDAL[i]}</div><div class="pd-handle mono">${esc(L[i].handle)}</div><div class="pd-score mono">${L[i].score} pts · ${L[i].solved}/4</div><div class="pd-block">${i + 1}</div></div>`)
+				.map((i) => `<div class="pd pd-${i + 1}"><div class="medal">${MEDAL[i]}</div><div class="pd-handle mono">${esc(L[i].handle)}</div><div class="pd-score mono">${L[i].score} pts · ${L[i].solved}/${board.stats.cases || 5}</div><div class="pd-block">${i + 1}</div></div>`)
 				.join('');
 			pod.classList.remove('hidden');
 		} else pod.classList.add('hidden');
 
 		$('rows').innerHTML = L.length
-			? L.map((r) => `<tr class="${r.rank <= 3 ? 'top top-' + r.rank : ''}"><td class="c-rank">${r.rank <= 3 ? MEDAL[r.rank - 1] : '<span class="mono">' + r.rank + '</span>'}</td><td class="handle mono">${esc(r.handle)}</td><td class="num mono score">${r.score}</td><td class="num mono">${r.solved}/4</td></tr>`).join('')
+			? L.map((r) => `<tr class="${r.rank <= 3 ? 'top top-' + r.rank : ''}"><td class="c-rank">${r.rank <= 3 ? MEDAL[r.rank - 1] : '<span class="mono">' + r.rank + '</span>'}</td><td class="handle mono">${esc(r.handle)}</td><td class="num mono score">${r.score}</td><td class="num mono">${r.solved}/${board.stats.cases || 5}</td></tr>`).join('')
 			: '<tr><td colspan="4" class="empty">Waiting for analysts…</td></tr>';
 
 		$('m-analysts').textContent = board.stats.analysts;

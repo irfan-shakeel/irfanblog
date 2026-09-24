@@ -1,0 +1,9 @@
+Research Visitor Export
+Generated: 2026-09-23 17:42
+Name: Alex Example
+Lab: Controls Research
+Badge Tier: Visitor
+Test Card: 4111 1111 1111 1111
+Test SSN: 123-45-6789
+Documentation IP: 192.0.2.45
+Note: synthetic training data only

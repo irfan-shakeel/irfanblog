@@ -46,11 +46,10 @@ export const onRequestPost = handle(async ({ request, env }) => {
 		case 'reset_all': {
 			if (body.confirm !== 'RESET') return err('Type RESET to confirm.');
 			const stmts = [
-				db.prepare('DELETE FROM solves'),
-				db.prepare('DELETE FROM submissions'),
+				db.prepare('DELETE FROM attempts'),
 				db.prepare(`UPDATE event_state SET is_open = 0, leaderboard_frozen = 0, show_final_results = 0, started_at = NULL, ends_at = NULL, frozen_snapshot = NULL, updated_at = ? WHERE id = 1`).bind(now),
 			];
-			if (body.action === 'reset_all') stmts.push(db.prepare('DELETE FROM participants'), db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('participants','submissions')"));
+			if (body.action === 'reset_all') stmts.push(db.prepare('DELETE FROM participants'), db.prepare("DELETE FROM sqlite_sequence WHERE name = 'participants'"));
 			await db.batch(stmts);
 			break;
 		}
@@ -78,7 +77,7 @@ export const onRequestPost = handle(async ({ request, env }) => {
 		case 'delete': {
 			if (body.confirm !== 'DELETE') return err('Type DELETE to confirm.');
 			const id = Number(body.id);
-			await db.batch([db.prepare('DELETE FROM solves WHERE participant_id = ?').bind(id), db.prepare('DELETE FROM submissions WHERE participant_id = ?').bind(id), db.prepare('DELETE FROM participants WHERE id = ?').bind(id)]);
+			await db.batch([db.prepare('DELETE FROM attempts WHERE participant_id = ?').bind(id), db.prepare('DELETE FROM participants WHERE id = ?').bind(id)]);
 			break;
 		}
 		default:
