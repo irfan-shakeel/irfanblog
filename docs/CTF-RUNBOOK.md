@@ -90,6 +90,26 @@ The answer key and flags live only in Cloudflare secrets. The instructor answer 
 | Need more time | Admin → **+1 min**. |
 | Started too early, before anyone submitted | **Reset scores (keep registrations)**, then **START** again. This clears every final submission. |
 
+## D1 read budget (Cloudflare free tier: 5,000,000 rows read per day, whole account)
+
+Measured with `scripts/ctf-event-sim.mjs` (local, real time, 30 students, 25 minutes including registration):
+the projector, the presenter console, 30 student phones polling status every 8 s, 10 phones also on the leaderboard and 150 final submissions came to about 77,000 rows read in total, roughly 1.5% of the daily limit.
+
+How this stays low:
+- **Leaderboard** (`/api/ctf/leaderboard`, every 4 s): the public board is cached in `event_state` and tagged with `data_version`. A poll reads 1 row. The first poll after a change (registration, submission, hide, rename, delete, reset) recomputes it once, at about 350 rows with 30 students.
+- **Per-participant aggregates** (`score`, `solved`, `attempted`, `last_solve_at`) are recomputed from `attempts` inside the same transaction as each final submission. The leaderboard never scans submissions per poll.
+- **Presenter console** (`/admin/overview`, every 4 s) sends `?v=` and gets a state-only reply (1 row) unless something changed.
+- **Students** poll only `/api/ctf/me` (session + state + their own ≤5 attempts, about 3–7 rows) every 8 s. Students never poll the leaderboard.
+- **Indexes:** `idx_participants_board`, `idx_attempts_passed_time`, `idx_attempts_challenge`, `idx_participants_session`, plus the primary key on `attempts(participant_id, challenge_id)`.
+
+Before the event, **avoid heavy testing on the same UTC day**. The limit is account-wide, shared with other projects, and resets at 00:00 UTC (8 pm Eastern). If it is exceeded, D1 queries fail until the reset. Check with `npx wrangler d1 info nmt-ctf`.
+
+To measure locally: set `CTF_D1_DEBUG=1` in `.dev.vars`. The API then returns `x-d1-rows-read` headers. This is never set in Cloudflare.
+```
+npm run build && npx wrangler pages dev dist     # then, in another terminal:
+SCALE=1 node scripts/ctf-event-sim.mjs            # real time; SCALE=10 for a quick run
+```
+
 ## Architecture notes
 
 - The static Astro site is unchanged. `/ctf/*` is static HTML plus client scripts.

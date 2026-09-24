@@ -52,6 +52,7 @@ export function handle(fn) {
 	return async (ctx) => {
 		try {
 			requireConfig(ctx.env);
+			if (ctx.env.CTF_D1_DEBUG === '1') return await measured(fn, ctx);
 			return await fn(ctx);
 		} catch (e) {
 			if (e instanceof HttpError) return err(e.message, e.status);
@@ -59,6 +60,31 @@ export function handle(fn) {
 			return err('Server error. Please try again.', 500);
 		}
 	};
+}
+
+// ---------- D1 read accounting (local diagnostics only; enabled by CTF_D1_DEBUG=1) ----------
+// Wraps the D1 binding so every statement's meta.rows_read is summed and returned in the
+// x-d1-rows-read / x-d1-queries response headers. Never enabled in production.
+async function measured(fn, ctx) {
+	const real = ctx.env.CTF_DB;
+	const tally = { rows: 0, queries: 0 };
+	const add = (meta) => { tally.rows += meta?.rows_read || 0; tally.queries++; };
+	const wrapStmt = (st) => ({
+		_real: st,
+		bind: (...a) => wrapStmt(st.bind(...a)),
+		all: async () => { const r = await st.all(); add(r.meta); return r; },
+		run: async () => { const r = await st.run(); add(r.meta); return r; },
+		first: async (col) => { const r = await st.all(); add(r.meta); const row = r.results[0] ?? null; return col == null || row == null ? row : row[col]; },
+	});
+	const db = {
+		prepare: (sql) => wrapStmt(real.prepare(sql)),
+		batch: async (stmts) => { const rs = await real.batch(stmts.map((x) => x._real || x)); rs.forEach((r) => add(r.meta)); return rs; },
+	};
+	const res = await fn({ ...ctx, env: { ...ctx.env, CTF_DB: db } });
+	const out = new Response(res.body, res);
+	out.headers.set('x-d1-rows-read', String(tally.rows));
+	out.headers.set('x-d1-queries', String(tally.queries));
+	return out;
 }
 
 function requireConfig(env) {
@@ -113,7 +139,7 @@ export async function getParticipant(env, request) {
 	const token = getCookie(request, SESSION_COOKIE);
 	if (!token || token.length < 20 || token.length > 100) return null;
 	const h = await hashSessionToken(env, token);
-	return env.CTF_DB.prepare('SELECT * FROM participants WHERE session_hash = ?').bind(h).first();
+	return env.CTF_DB.prepare('SELECT id, handle, session_hash, is_hidden FROM participants WHERE session_hash = ?').bind(h).first();
 }
 
 export async function issueSession(env, participantId) {
@@ -214,11 +240,14 @@ export function validChallenge(id) {
 }
 
 // ---------- event state ----------
-export async function getState(env) {
-	const s = await env.CTF_DB.prepare('SELECT * FROM event_state WHERE id = 1').first();
+// Small state columns only (no cached JSON blobs) for the hot paths: /me, submit, admin.
+const STATE_COLS = 'id, is_open, leaderboard_frozen, show_final_results, duration_minutes, started_at, ends_at, updated_at, data_version';
+export async function getState(env, { withBoard = false } = {}) {
+	const cols = withBoard ? STATE_COLS + ', frozen_snapshot, board_cache, board_cache_version, board_cache_at' : STATE_COLS;
+	const s = await env.CTF_DB.prepare(`SELECT ${cols} FROM event_state WHERE id = 1`).first();
 	if (s) return s;
 	await env.CTF_DB.prepare('INSERT OR IGNORE INTO event_state (id, updated_at) VALUES (1, ?)').bind(nowIso()).run();
-	return env.CTF_DB.prepare('SELECT * FROM event_state WHERE id = 1').first();
+	return env.CTF_DB.prepare(`SELECT ${cols} FROM event_state WHERE id = 1`).first();
 }
 export function publicState(s) {
 	return {
@@ -232,52 +261,70 @@ export function publicState(s) {
 		serverNow: nowIso(),
 	};
 }
+// Statement that marks the public board as changed. Include it in the same batch as the change.
+export const bumpVersion = (db) => db.prepare('UPDATE event_state SET data_version = data_version + 1 WHERE id = 1');
+// Statement that recomputes one participant's aggregates from attempts (idempotent, <= 5 rows).
+export const refreshAggregates = (db, pid) =>
+	db
+		.prepare(
+			`UPDATE participants SET
+			   score = (SELECT COALESCE(SUM(points_awarded),0) FROM attempts WHERE participant_id = ?1),
+			   solved = (SELECT COALESCE(SUM(passed),0) FROM attempts WHERE participant_id = ?1),
+			   attempted = (SELECT COUNT(*) FROM attempts WHERE participant_id = ?1),
+			   last_solve_at = (SELECT MAX(submitted_at) FROM attempts WHERE participant_id = ?1 AND passed = 1)
+			 WHERE id = ?1 RETURNING score, solved, attempted`
+		)
+		.bind(pid);
 
 // ---------- leaderboard ----------
-// Score = sum of points from passed final submissions. Tie-break: passed count, then the
-// time the current score was reached (latest passed submission), then registration time.
-export async function computeBoard(env, { includeHidden = false, limit = 15 } = {}) {
+// Ranking: score DESC, passed DESC, time the current score was reached ASC (a score of 0 has
+// no solve time, and every score > 0 has one), registration time ASC. Served by idx_participants_board.
+export const BOARD_ORDER = 'score DESC, solved DESC, last_solve_at ASC, created_at ASC, id ASC';
+
+// Public board from per-participant aggregates. Cost is ~O(participants + attempts) once,
+// then cached (see getBoard) until data_version changes.
+export async function computeBoard(env, { limit = 15 } = {}) {
 	const db = env.CTF_DB;
-	const hid = includeHidden ? '' : 'WHERE p.is_hidden = 0';
-	const [rows, counts, perChal, latest] = await db.batch([
+	const [leaders, counts, perChal, latest] = await db.batch([
+		db.prepare(`SELECT handle, score, solved FROM participants WHERE is_hidden = 0 ORDER BY ${BOARD_ORDER} LIMIT ?`).bind(limit),
+		db.prepare('SELECT COUNT(*) AS analysts, COALESCE(SUM(attempted),0) AS submissions, COALESCE(SUM(solved),0) AS solves FROM participants WHERE is_hidden = 0'),
 		db.prepare(
-			`SELECT p.id, p.handle, COALESCE(SUM(a.points_awarded),0) AS score, COALESCE(SUM(a.passed),0) AS solved,
-			        COUNT(a.challenge_id) AS attempted,
-			        MAX(CASE WHEN a.passed = 1 THEN a.submitted_at END) AS last_solve_at, p.created_at
-			   FROM participants p LEFT JOIN attempts a ON a.participant_id = p.id
-			   ${hid}
-			  GROUP BY p.id
-			  ORDER BY score DESC, solved DESC, (last_solve_at IS NULL) ASC, last_solve_at ASC, p.created_at ASC, p.id ASC`
-		),
-		db.prepare(
-			`SELECT (SELECT COUNT(*) FROM participants p ${hid}) AS analysts,
-			        (SELECT COUNT(*) FROM attempts a JOIN participants p ON p.id = a.participant_id ${hid}) AS submissions,
-			        (SELECT COALESCE(SUM(a.passed),0) FROM attempts a JOIN participants p ON p.id = a.participant_id ${hid}) AS solves`
-		),
-		db.prepare(
-			`SELECT a.challenge_id, COALESCE(SUM(a.passed),0) AS passed, COUNT(*) AS attempted
-			   FROM attempts a JOIN participants p ON p.id = a.participant_id ${hid} GROUP BY a.challenge_id`
+			`SELECT challenge_id, COALESCE(SUM(passed),0) AS passed, COUNT(*) AS attempted FROM attempts
+			  WHERE participant_id NOT IN (SELECT id FROM participants WHERE is_hidden = 1) GROUP BY challenge_id`
 		),
 		db.prepare(
 			`SELECT p.handle, a.challenge_id, a.submitted_at FROM attempts a JOIN participants p ON p.id = a.participant_id
-			  ${hid ? hid + ' AND' : 'WHERE'} a.passed = 1 ORDER BY a.submitted_at DESC LIMIT 5`
+			  WHERE a.passed = 1 AND p.is_hidden = 0 ORDER BY a.submitted_at DESC LIMIT 5`
 		),
 	]);
-	const all = rows.results.map((r, i) => ({ rank: i + 1, id: r.id, handle: r.handle, score: r.score, solved: r.solved, attempted: r.attempted, lastSolveAt: r.last_solve_at }));
 	const c = counts.results[0] || { analysts: 0, submissions: 0, solves: 0 };
 	const pc = Object.fromEntries(perChal.results.map((r) => [r.challenge_id, r]));
 	return {
-		all,
-		leaders: all.slice(0, limit).map(({ id, attempted, ...rest }) => rest),
+		leaders: leaders.results.map((r, i) => ({ rank: i + 1, handle: r.handle, score: r.score, solved: r.solved })),
 		stats: { analysts: c.analysts, submissions: c.submissions, solves: c.solves, cases: CASE_COUNT },
 		progress: CHALLENGES.map((ch) => ({ id: ch.id, title: ch.title, solved: pc[ch.id]?.passed || 0, attempted: pc[ch.id]?.attempted || 0 })),
-		latest: latest.results.map((r) => ({ handle: r.handle, challenge: TITLES[r.challenge_id] || r.challenge_id, at: r.solved_at || r.submitted_at })),
+		latest: latest.results.map((r) => ({ handle: r.handle, challenge: TITLES[r.challenge_id] || r.challenge_id, at: r.submitted_at })),
 	};
 }
 
 // Public shape: handles only. Never names, emails or answers.
 export function publicBoard(b) {
 	return { leaders: b.leaders, stats: b.stats, progress: b.progress, latest: b.latest, generatedAt: nowIso() };
+}
+
+// Versioned cache of the LIVE public board in event_state. A poll costs one row read while
+// nothing has changed; the first poll after any change (registration, submission, hide,
+// rename, delete, reset) recomputes it once. Always exact: never serves a stale version.
+// `s` must come from getState(env, { withBoard: true }).
+export async function getBoard(env, s, { force = false } = {}) {
+	if (!force && s.board_cache && s.board_cache_version === s.data_version) return JSON.parse(s.board_cache);
+	const board = publicBoard(await computeBoard(env));
+	await env.CTF_DB
+		// Store only if no newer change landed while computing (otherwise the next poll recomputes).
+		.prepare('UPDATE event_state SET board_cache = ?1, board_cache_version = ?2, board_cache_at = ?3 WHERE id = 1 AND data_version = ?2')
+		.bind(JSON.stringify(board), s.data_version, nowIso())
+		.run();
+	return board;
 }
 
 // ---------- validation ----------

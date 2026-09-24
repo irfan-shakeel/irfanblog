@@ -153,11 +153,12 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		$('logout').classList.remove('hidden');
 		load();
 		clearInterval(timer);
-		timer = setInterval(load, 3000);
+		timer = setInterval(load, 4000);
 	}
 
+	let version: number | null = null; // data_version of the table we are showing
 	async function load() {
-		const r = await api('admin/overview');
+		const r = await api('admin/overview' + (version !== null ? '?v=' + version : ''));
 		if (r.status === 401) { clearInterval(timer); $('console').classList.add('hidden'); $('login').classList.remove('hidden'); return; }
 		if (!r.ok) return;
 		state = r.state;
@@ -168,6 +169,8 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 			state.final ? ['ok', 'Final results SHOWN'] : ['', 'Results hidden'],
 		];
 		$('pills').innerHTML = pills.map(([c, t]) => `<span class="pill ${c}">${t}</span>`).join('');
+		if (r.unchanged) return; // nothing changed since last poll: state-only response (1 D1 row)
+		version = r.version;
 		$('s-an').textContent = r.stats.analysts;
 		$('s-sub').textContent = r.stats.submissions;
 		$('s-sol').textContent = r.stats.solves;
@@ -195,7 +198,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 
 	async function act(action: string, extra: any = {}) {
 		const r = await api('admin/action', { method: 'POST', body: { action, ...extra } });
-		if (r.ok) { toast('Done: ' + action.replace('_', ' ')); load(); }
+		if (r.ok) { toast('Done: ' + action.replace('_', ' ')); version = null; load(); }
 		else toast(r.error || 'Action failed');
 		return r;
 	}

@@ -1,4 +1,4 @@
-import { handle, readJson, json, err, nowIso, getParticipant, getState, validChallenge, normalizeAnswers, isCorrect, flagFor, POINTS, throttle } from '../../../ctf-lib/server.js';
+import { handle, readJson, json, err, nowIso, getParticipant, getState, validChallenge, normalizeAnswers, isCorrect, flagFor, POINTS, throttle, bumpVersion, refreshAggregates } from '../../../ctf-lib/server.js';
 import { TAKEAWAYS } from '../../../ctf-lib/server-content.js';
 
 // ONE final submission per participant per case.
@@ -26,13 +26,18 @@ export const onRequestPost = handle(async ({ request, env }) => {
 
 	const passed = isCorrect(env, challengeId, answers);
 	const points = passed ? POINTS[challengeId] : 0;
-	const ins = await db
-		.prepare('INSERT OR IGNORE INTO attempts (participant_id, challenge_id, answers_json, passed, points_awarded, submitted_at) VALUES (?,?,?,?,?,?)')
-		.bind(p.id, challengeId, JSON.stringify(answers), passed ? 1 : 0, points, now)
-		.run();
+	// One transaction: the attempt row (PK participant_id+challenge_id makes it single-use),
+	// the participant's recomputed aggregates, and the leaderboard version bump.
+	const [ins, agg] = await db.batch([
+		db
+			.prepare('INSERT OR IGNORE INTO attempts (participant_id, challenge_id, answers_json, passed, points_awarded, submitted_at) VALUES (?,?,?,?,?,?)')
+			.bind(p.id, challengeId, JSON.stringify(answers), passed ? 1 : 0, points, now),
+		refreshAggregates(db, p.id),
+		bumpVersion(db),
+	]);
 	if (ins.meta.changes !== 1) return err('This case is already closed. Only one final submission is allowed.', 409, { code: 'already_submitted' });
 
-	const totals = await db.prepare('SELECT COALESCE(SUM(points_awarded),0) AS score, COALESCE(SUM(passed),0) AS passed, COUNT(*) AS attempted FROM attempts WHERE participant_id = ?').bind(p.id).first();
-	const base = { ok: true, passed, points, score: totals.score, passedCount: totals.passed, attempted: totals.attempted };
+	const totals = agg.results[0];
+	const base = { ok: true, passed, points, score: totals.score, passedCount: totals.solved, attempted: totals.attempted };
 	return json(passed ? { ...base, flag: flagFor(env, challengeId), takeaway: TAKEAWAYS[challengeId] } : base);
 });

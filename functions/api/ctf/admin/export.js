@@ -1,4 +1,4 @@
-import { handle, requireAdmin, computeBoard } from '../../../../ctf-lib/server.js';
+import { handle, requireAdmin, BOARD_ORDER } from '../../../../ctf-lib/server.js';
 import { CHALLENGES } from '../../../../ctf-lib/content.js';
 
 const esc = (v) => {
@@ -30,26 +30,13 @@ export const onRequestGet = handle(async ({ request, env }) => {
 			...r.results.map((s) => [s.handle, s.full_name, s.email, s.challenge_id, s.passed ? 'passed' : 'failed', s.points_awarded, readable(s.challenge_id, JSON.parse(s.answers_json)), s.submitted_at]),
 		]);
 	} else {
-		const board = await computeBoard(env, { includeHidden: true });
-		const rank = Object.fromEntries(board.all.map((r) => [r.id, r.rank]));
 		const [people, attempts] = await db.batch([
-			db.prepare('SELECT id, full_name, email, handle, is_hidden, created_at, last_activity_at FROM participants'),
+			db.prepare(`SELECT id, full_name, email, handle, is_hidden, created_at, last_activity_at, score, solved, attempted, last_solve_at FROM participants ORDER BY ${BOARD_ORDER}`),
 			db.prepare('SELECT participant_id, challenge_id, passed, points_awarded, submitted_at FROM attempts'),
 		]);
 		const by = {};
 		for (const a of attempts.results) (by[a.participant_id] ||= {})[a.challenge_id] = a;
-		const rows = people.results
-			.map((p) => {
-				const mine = by[p.id] || {};
-				const vals = Object.values(mine);
-				return {
-					p, mine, rank: rank[p.id],
-					score: vals.reduce((t, a) => t + a.points_awarded, 0),
-					passed: vals.filter((a) => a.passed).length,
-					reached: vals.filter((a) => a.passed).map((a) => a.submitted_at).sort().pop() || '',
-				};
-			})
-			.sort((a, b) => a.rank - b.rank);
+		const rows = people.results.map((p, i) => ({ p, mine: by[p.id] || {}, rank: i + 1, score: p.score, passed: p.solved, reached: p.last_solve_at || '' }));
 		body = csv([
 			['rank_incl_hidden', 'handle', 'full_name', 'email', 'score', 'passed', 'attempted', 'hidden', 'registered_at', 'last_activity_at', 'score_reached_at', ...CHALLENGES.flatMap((c) => [c.id + '_result', c.id + '_points', c.id + '_submitted_at'])],
 			...rows.map(({ p, mine, rank, score, passed, reached }) => [

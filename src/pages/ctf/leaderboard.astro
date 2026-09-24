@@ -126,7 +126,7 @@ import CtfLayout from '../../layouts/CtfLayout.astro';
 		t.parentElement!.classList.toggle('low', ms != null && ms < 120000 && state?.isOpen);
 	}, 250);
 	poll();
-	setInterval(poll, 2500);
+	setInterval(poll, 4000); // server serves a cached board; 4 s keeps D1 reads low
 </script>
 
 <style is:global>

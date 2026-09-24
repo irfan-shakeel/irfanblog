@@ -1,4 +1,4 @@
-import { handle, readJson, json, err, nowIso, cleanText, HANDLE_RE, EMAIL_RE, issueSession, sessionCookie, getParticipant, throttle, clientIp } from '../../../ctf-lib/server.js';
+import { handle, readJson, json, err, nowIso, cleanText, HANDLE_RE, EMAIL_RE, issueSession, sessionCookie, getParticipant, throttle, clientIp, bumpVersion } from '../../../ctf-lib/server.js';
 
 export const onRequestPost = handle(async ({ request, env }) => {
 	// Generous per-IP limit: a whole classroom on campus Wi-Fi shares one NAT address.
@@ -22,7 +22,7 @@ export const onRequestPost = handle(async ({ request, env }) => {
 	const handleN = handleRaw.toLowerCase();
 	const db = env.CTF_DB;
 
-	const count = await db.prepare('SELECT COUNT(*) AS n FROM participants').first('n');
+	const count = await db.prepare('SELECT MAX(id) AS n FROM participants').first('n'); // O(1) via rowid
 	if (count >= 500) return err('Registration is full.', 403);
 
 	const dupe = await db
@@ -47,6 +47,7 @@ export const onRequestPost = handle(async ({ request, env }) => {
 		}
 		throw e;
 	}
+	await bumpVersion(db).run();
 	const token = await issueSession(env, id);
 	return json({ ok: true, handle: handleRaw }, 201, { 'set-cookie': sessionCookie(token) });
 });

@@ -8,3 +8,5 @@ CTF_FLAG_BLIND=FLAG{...}
 CTF_FLAG_CAPABLE=FLAG{...}
 CTF_FLAG_OBJECTIVE=FLAG{...}
 CTF_FLAG_BOUNDARY=FLAG{...}
+# Local only: adds x-d1-rows-read headers for scripts/ctf-event-sim.mjs. Never set in Cloudflare.
+# CTF_D1_DEBUG=1
