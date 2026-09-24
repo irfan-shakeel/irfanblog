@@ -7,7 +7,7 @@ import { defineConfig, fontProviders } from 'astro/config';
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://example.com',
-	integrations: [mdx(), sitemap({ filter: (page) => !page.includes('/ctf') })],
+	integrations: [mdx(), sitemap({ filter: (page) => !page.includes('/ctf') && !page.includes('/trust-lab') })],
 	fonts: [
 		{
 			provider: fontProviders.local(),
