@@ -82,14 +82,17 @@ function goTo(i, step = 0, animate = true) {
 }
 
 function advance() {
-	if (S.busy) return;
+	if (S.busy) { // a press during LOCK-IN skips the banner instead of being ignored
+		clearTimeout(S.lockT); S.timers.delete(S.lockT); $('#lockin').classList.remove('show'); S.busy = false;
+		return applyStep(S.step + 1, true);
+	}
 	const sc = SCENES[S.i];
 	if (S.step < sc.steps) {
 		const k = S.step + 1;
 		if (sc.lock && sc.lock.includes(k)) {
 			S.busy = true;
 			$('#lockin').classList.add('show');
-			later(() => { $('#lockin').classList.remove('show'); S.busy = false; applyStep(k, true); }, 1100);
+			S.lockT = later(() => { $('#lockin').classList.remove('show'); S.busy = false; applyStep(k, true); }, 1100);
 		} else applyStep(k, true);
 	} else if (S.i < SCENES.length - 1) goTo(S.i + 1, 0, true);
 }
@@ -329,12 +332,14 @@ const SCENES = [
 		html: `
 			<div class="abs" style="left:0;top:0" data-step="0"><div class="eyebrow">DEEP CDR · DISARM</div></div>
 			<div class="abs center" style="right:0;top:0" data-step="0" data-until="1"><div class="chip" style="font-size:40px;padding:20px 44px;border-color:var(--orange);color:var(--orange)">▶ SANITIZE</div></div>
-			<div class="abs" id="stack" style="left:260px;top:90px;width:1000px;height:720px">
+			<div class="abs stacked" id="stack" style="left:260px;top:90px;width:1000px;height:720px">
 				${COMPONENTS.map((c, k) => `<div class="comp abs" data-c="${c.k}" style="left:${k * 14}px;top:${k * 16}px;width:780px;font-size:34px;padding:22px 30px">${c.icon}<span>${c.n}</span><span class="ctag"></span></div>`).join('')}
+				<div class="comp abs stack-top" data-until="1" style="left:${(COMPONENTS.length - 1) * 14}px;top:${(COMPONENTS.length - 1) * 16}px;width:780px;font-size:34px;padding:22px 30px">📄<span>${FILE}<br><span class="label" style="font-size:22px">${COMPONENTS.length} LAYERS INSIDE · PRESS SANITIZE</span></span></div>
 			</div>`,
 		hooks: {
 			1: (r, a) => {
 				const els = COMPONENTS.map((c) => $(`.comp[data-c="${c.k}"]`, r));
+				$('#stack', r).classList.remove('stacked');
 				const explode = () => els.forEach((el, k) => { el.style.left = '0px'; el.style.top = k * 118 + 'px'; });
 				const mark = () => COMPONENTS.forEach((c, k) => {
 					const el = els[k], tag = $('.ctag', el);
@@ -342,7 +347,7 @@ const SCENES = [
 					else if (c.need === 'q') { el.classList.add('rm'); tag.innerHTML = '<span class="pill r">REMOVE ✕</span>'; }
 					else tag.innerHTML = '<span class="pill n">PER POLICY</span>';
 				});
-				const remove = () => COMPONENTS.forEach((c, k) => { if (c.need === 'q') { els[k].style.left = '560px'; els[k].style.opacity = '.3'; } });
+				const remove = () => COMPONENTS.forEach((c, k) => { if (c.need === 'q') { els[k].style.left = '200px'; els[k].style.opacity = '.75'; els[k].classList.add('struck'); } });
 				if (!a) { explode(); mark(); remove(); return; }
 				explode(); later(mark, 900); later(remove, 2100);
 			},
@@ -506,7 +511,7 @@ const SCENES = [
 		html: `
 			<div class="zone" style="left:40px">OUTSIDE</div>
 			<div class="zone" style="right:40px">TRUSTED ENVIRONMENT</div>
-			<div class="boundary closed"></div>
+			<div class="boundary closed" style="bottom:150px"></div>
 			<div class="abs" style="left:40px;top:120px" data-step="0">${fileCard('', 'sm')}
 				<div class="col" style="gap:14px;margin-top:24px">
 					<div class="card" style="padding:18px 24px"><div class="label">MULTISCAN</div><div style="font-size:30px;font-weight:800">Evidence collected</div></div>

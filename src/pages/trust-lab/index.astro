@@ -193,6 +193,9 @@
 	.comp.keep { border-color: rgba(43, 212, 106, 0.6); }
 	.comp.q { border-color: rgba(255, 197, 61, 0.7); background: var(--amber-a); }
 	.comp.rm { border-color: rgba(255, 91, 91, 0.8); background: var(--red-a); }
+	.stacked .comp:not(.stack-top) > * { visibility: hidden; }
+	.stack-top { border-color: var(--cyan); box-shadow: 0 20px 60px rgba(0,0,0,.6); line-height: 1.25; }
+	.comp.struck > span:not(.ctag) { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 3px; }
 	.comp.gone { opacity: 0; transform: translateX(260px) scale(0.9); }
 	.ic { stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
