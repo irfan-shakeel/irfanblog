@@ -96,6 +96,7 @@ function advance() {
 const next = () => (S.i < SCENES.length - 1 ? goTo(S.i + 1, 0, true) : null);
 const back = () => (S.step > 0 ? goTo(S.i, S.step - 1, false) : S.i > 0 ? goTo(S.i - 1, SCENES[S.i - 1].steps, false) : null);
 const reset = () => goTo(S.i, 0, true);
+const prevScene = () => (S.i > 0 ? goTo(S.i - 1, 0, true) : goTo(0, 0, true));
 
 function updateChrome() {
 	const sc = SCENES[S.i];
@@ -207,7 +208,7 @@ const SCENES = [
 			<div class="abs row" style="left:0;right:0;top:560px;justify-content:center;gap:20px">
 				${['SIGNATURES', 'HEURISTICS', 'REPUTATION', 'MACHINE LEARNING', 'UPDATE TIMING'].map((t, k) => `<div class="chip" data-step="2" data-anim="pop" style="--d:${k * 0.15}s;font-size:28px;padding:16px 26px">${t}</div>`).join('')}
 			</div>
-			<div class="abs center lead" style="left:0;right:0;top:680px;--d:.9s" data-step="2">Each engine combines <b>different</b> techniques, knowledge and update timing.</div>`,
+			<div class="abs center lead" style="left:0;right:0;top:680px;--d:.9s" data-step="2">Engines use <b>different combinations</b> of these — not every engine uses every technique.</div>`,
 	},
 	// ------------------------------------------------ 4 1D ONE BYTE
 	{
@@ -224,7 +225,7 @@ const SCENES = [
 				<div class="mono" id="hash" style="font-size:54px;font-weight:800;margin-top:6px;transition:color .4s">4332…d87</div>
 			</div>
 			<div class="abs" style="left:60px;right:60px;top:340px;display:grid;grid-template-columns:repeat(12,1fr);gap:10px" data-step="2">
-				${Array.from({ length: 12 }, (_, k) => `<div class="engine" style="width:auto;padding:14px 4px"><div class="en" style="font-size:16px">${String(k + 1).padStart(2, '0')}</div><div class="er" style="font-size:16px">···</div></div>`).join('')}
+				${Array.from({ length: 12 }, (_, k) => `<div class="engine" style="width:auto;padding:14px 4px"><div class="en" style="font-size:20px">${String(k + 1).padStart(2, '0')}</div><div class="er" style="font-size:19px">···</div></div>`).join('')}
 			</div>
 			<div class="abs" style="right:60px;top:40px;text-align:right" data-step="2">
 				<div class="count" style="font-size:110px"><span class="n red">0</span><span class="of"> / 12</span></div>
@@ -457,6 +458,7 @@ const SCENES = [
 				<div class="ln on">Card:      <span class="hl lit" data-r="**** **** **** 1111">4111 1111 1111 1111</span></div>
 				<div class="ln on">System IP: <span class="hl lit" data-r="192.0.2.***">192.0.2.25</span></div>
 			</div>
+			<div class="abs" style="left:0;top:640px;width:940px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line" style="font-size:54px">SANITIZE / <span class="cyan">REDACT</span></div><div class="lead" style="margin-top:14px;font-size:28px">Remove the sensitive values. <b>Keep the useful content.</b></div></div>
 			<div class="abs center label" style="left:1000px;right:0;top:650px;--d:2.2s" data-step="2"><span class="green">REDACTED COPY · BUSINESS CONTENT KEPT</span></div>`,
 		hooks: {
 			2: (r, a) => seq(3, 650, (k) => { const h = $$('.hl', r)[k]; h.textContent = h.dataset.r; h.classList.remove('lit'); h.classList.add('red'); }, a, 200),
@@ -489,13 +491,13 @@ const SCENES = [
 	},
 	// ------------------------------------------------ 19 4B THREE QUESTIONS
 	{
-		module: 'TRUST PIPELINE', title: '4B · Three controls, three questions', stage: 3, steps: 2,
+		module: 'TRUST PIPELINE', title: '4B · Three controls, three questions', stage: 3, steps: 1,
 		notes: { key: 'Three controls, three different questions.' },
 		html: `
 			<div class="abs row" style="left:0;right:0;top:20px;justify-content:center;gap:36px;align-items:stretch">
-				${[['MULTISCANNING', 'Do multiple detection perspectives see evidence of a threat?'], ['DEEP CDR', 'What capability can we safely remove while preserving the business content?'], ['DLP', 'Does the file contain data that policy restricts?']].map(([a, b], k) => `<div class="card" data-step="1" data-anim="pop" style="width:540px;--d:${k * 0.35}s"><div class="cyan" style="font-size:40px;font-weight:900">${a}</div><div style="font-size:38px;font-weight:700;margin-top:18px;line-height:1.3">${b}</div></div>`).join('')}
+				${[['MULTISCANNING', 'Do multiple detection perspectives see evidence of a threat?'], ['DEEP CDR', 'What capability can we safely remove while preserving the business content?'], ['DLP', 'Does the file contain data that policy restricts?']].map(([a, b], k) => `<div class="card" data-step="0" data-anim="pop" style="width:540px;--d:${k * 0.35}s"><div class="cyan" style="font-size:40px;font-weight:900">${a}</div><div style="font-size:38px;font-weight:700;margin-top:18px;line-height:1.3">${b}</div></div>`).join('')}
 			</div>
-			<div class="abs center" style="left:0;right:0;top:560px" data-step="2" data-anim="pop"><div class="reveal-box reveal-line" style="font-size:50px">NONE OF THESE QUESTIONS MEANS THE SAME THING.</div></div>`,
+			<div class="abs center" style="left:0;right:0;top:560px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line" style="font-size:50px">NONE OF THESE QUESTIONS MEANS THE SAME THING.</div></div>`,
 	},
 	// ------------------------------------------------ 20 4C FINAL QUESTION
 	{
@@ -553,7 +555,7 @@ sceneEl.addEventListener('click', (e) => { const c = e.target.closest('.choice')
 
 $('#controls').addEventListener('click', (e) => {
 	const a = e.target.closest('button')?.dataset.act;
-	({ back, reveal: advance, next, reset, menu: () => toggle('#menu'), notes: () => toggle('#notes'), full: fullscreen, hide: () => $('#controls').classList.add('off') })[a]?.();
+	({ back, reveal: advance, next, prevScene, reset, menu: () => toggle('#menu'), notes: () => toggle('#notes'), full: fullscreen, hide: () => $('#controls').classList.add('off') })[a]?.();
 	e.target.blur();
 });
 
@@ -561,8 +563,11 @@ document.addEventListener('keydown', (e) => {
 	if (e.altKey || e.ctrlKey || e.metaKey) return;
 	const k = e.key;
 	if ($('#menu').classList.contains('open') && /^[1-6]$/.test(k)) { toggle('#menu', false); goTo(MODULES[Number(k) - 1][2], 0, true); return; }
+	if (e.shiftKey && k === 'ArrowRight') { e.preventDefault(); return next(); }
+	if (e.shiftKey && k === 'ArrowLeft') { e.preventDefault(); return prevScene(); }
 	const map = {
-		ArrowRight: next, ArrowLeft: back, ' ': advance, Enter: advance, PageDown: advance, PageUp: back,
+		// → / Space / Enter / PageDown all REVEAL the next step, then move on to the next scene.
+		ArrowRight: advance, ArrowLeft: back, ' ': advance, Enter: advance, PageDown: advance, PageUp: back, ArrowDown: advance, ArrowUp: back,
 		r: reset, R: reset, f: fullscreen, F: fullscreen, Home: () => goTo(0, 0, true),
 		p: () => $('#controls').classList.toggle('off'), P: () => $('#controls').classList.toggle('off'),
 		n: () => toggle('#notes'), N: () => toggle('#notes'), m: () => toggle('#menu'), M: () => toggle('#menu'),

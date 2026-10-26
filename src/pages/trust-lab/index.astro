@@ -36,9 +36,10 @@
 
 		<!-- Presenter-only UI (outside the projected canvas scaling; toggle with P / N / M) -->
 		<div id="controls" class="controls">
-			<button data-act="back" title="Back (←)">← Back</button>
-			<button data-act="reveal" class="primary" title="Reveal / advance (Space)">Reveal ␣</button>
-			<button data-act="next" title="Next scene (→)">Next →</button>
+			<button data-act="prevScene" title="Previous scene (Shift+←)">⇤</button>
+			<button data-act="back" title="Back one step (←)">← Back</button>
+			<button data-act="reveal" class="primary" title="Reveal next step (→ / Space)">Next ▶</button>
+			<button data-act="next" title="Skip to next scene (Shift+→)">⇥</button>
 			<button data-act="reset" title="Reset scene (R)">Reset R</button>
 			<button data-act="menu" title="Module menu (M)">Menu M</button>
 			<button data-act="notes" title="Presenter notes (N)">Notes N</button>
@@ -54,7 +55,7 @@
 			<div class="menu-card">
 				<div class="menu-head">JUMP TO MODULE <span>M / Esc to close</span></div>
 				<div id="menu-list"></div>
-				<div class="menu-foot">Keys: → next · ← back · Space reveal · R reset · F fullscreen · P controls · N notes · M menu · Home restart</div>
+				<div class="menu-foot">Keys: → / Space reveal next · ← back one step · Shift+→ / Shift+← skip scene · R reset · F fullscreen · P controls · N notes · M menu · Home restart</div>
 			</div>
 		</div>
 
