@@ -1,4 +1,4 @@
-// "Inside the Trust Pipeline" — presenter-controlled explainer engine + scenes.
+// "Inside the Trust Pipeline": presenter-controlled explainer engine + scenes.
 // Static and self-contained: no network requests, no storage, no backend.
 
 // ---------------------------------------------------------------- icons
@@ -159,7 +159,7 @@ const SCENES = [
 	// ------------------------------------------------ 1 1A ONE SCANNER
 	{
 		module: 'MULTISCANNING', title: '1A · One scanner', stage: 0, steps: 2, lock: [2],
-		notes: { ask: '“One engine says clean. Case closed?”', key: 'One engine = one perspective.', flow: 'Space runs the scan, Space again reveals.' },
+		notes: { ask: '“One engine says clean. Case closed?”', key: 'One engine = one perspective.', flow: 'Space runs the scan; Space again reveals the result.' },
 		html: `
 			<div class="eyebrow" data-step="0">MODULE 1 · MULTISCANNING</div>
 			<div class="title" data-step="0">ONE FILE. MANY OPINIONS.</div>
@@ -185,7 +185,7 @@ const SCENES = [
 	// ------------------------------------------------ 2 1B MANY ENGINES
 	{
 		module: 'MULTISCANNING', title: '1B · Twelve engines', stage: 0, steps: 1,
-		notes: { ask: '“Same file, twelve independent engines. What will they say?”', key: 'Same file, analysis fan-out; not twelve different files.', flow: 'Space resolves the engines one by one.' },
+		notes: { ask: '“Same file, twelve independent engines. What will they say?”', key: 'One file, twelve independent analyses. Not twelve different files.', flow: 'Space resolves the engines one by one.' },
 		html: (() => {
 			const pts = ring12(890, 420, 700, 330);
 			return `
@@ -207,11 +207,11 @@ const SCENES = [
 			<div class="abs center" style="left:0;right:0;top:10px" data-step="0"><span class="count" style="font-size:90px"><span class="red">3</span><span class="of"> / 12</span></span><div class="label">ENGINES FLAGGED</div></div>
 			<div class="abs center" style="left:0;right:0;top:240px" data-step="0"><div class="question">IS 3 / 12 “MALICIOUS”?</div></div>
 			<div class="abs" style="left:0;right:0;top:390px" data-step="0" data-until="1">${choices(['YES', 'NO', 'NOT ENOUGH INFORMATION'])}</div>
-			<div class="abs center" style="left:0;right:0;top:370px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line">DETECTION IS <span class="cyan">EVIDENCE</span> — NOT TRUTH.</div></div>
+			<div class="abs center" style="left:0;right:0;top:370px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line">DETECTION IS <span class="cyan">EVIDENCE</span>, NOT TRUTH.</div></div>
 			<div class="abs row" style="left:0;right:0;top:560px;justify-content:center;gap:20px">
 				${['SIGNATURES', 'HEURISTICS', 'REPUTATION', 'MACHINE LEARNING', 'UPDATE TIMING'].map((t, k) => `<div class="chip" data-step="2" data-anim="pop" style="--d:${k * 0.15}s;font-size:28px;padding:16px 26px">${t}</div>`).join('')}
 			</div>
-			<div class="abs center lead" style="left:0;right:0;top:680px;--d:.9s" data-step="2">Engines use <b>different combinations</b> of these — not every engine uses every technique.</div>`,
+			<div class="abs center lead" style="left:0;right:0;top:680px;--d:.9s" data-step="2">Engines use <b>different combinations</b> of these. Not every engine uses every technique.</div>`,
 	},
 	// ------------------------------------------------ 4 1D ONE BYTE
 	{
@@ -237,7 +237,7 @@ const SCENES = [
 			<div class="abs center" style="left:0;right:0;top:520px;--d:3.6s" data-step="2" data-until="3"><div class="question">DID THE RISK “DOUBLE”?</div></div>
 			<div class="abs center" style="left:0;right:0;top:500px" data-step="3" data-anim="pop">
 				<div class="reveal-box reveal-line" style="font-size:52px">No. The evidence changed. Our job is to <span class="cyan">interpret</span> it.</div>
-				<div class="lead" style="margin-top:28px">More independent detections can increase confidence —<br>but <b>consensus is not a substitute for analysis.</b></div>
+				<div class="lead" style="margin-top:28px">More independent detections can increase confidence,<br>but <b>consensus is not a substitute for analysis.</b></div>
 			</div>`,
 		hooks: {
 			1: (r, a) => {
@@ -266,7 +266,7 @@ const SCENES = [
 	// ------------------------------------------------ 6 2A OPEN THE DOCUMENT
 	{
 		module: 'DEEP CDR', title: '2A · Open the document', stage: 1, steps: 1,
-		notes: { ask: '“What is actually inside a PDF?”', key: 'A document is a container of content AND capabilities. Nothing here is labelled malicious.', flow: 'Space opens the container.' },
+		notes: { ask: '“What is actually inside a PDF?”', key: 'A document is a container of content AND capabilities. Nothing here is labeled malicious.', flow: 'Space opens the container.' },
 		html: `
 			<div class="eyebrow" data-step="0">MODULE 2 · DEEP CDR</div>
 			<div class="title" data-step="0">WHAT DOES THIS DOCUMENT <span class="cyan">ACTUALLY NEED?</span></div>
@@ -276,7 +276,7 @@ const SCENES = [
 			<div class="abs" style="left:700px;right:40px;top:200px;display:grid;grid-template-columns:1fr 1fr;gap:22px">
 				${COMPONENTS.map((c, k) => `<div class="comp" data-step="1" data-anim="left" style="--d:${0.2 + k * 0.18}s;font-size:32px;padding:26px 28px">${c.icon}<span>${c.n}</span></div>`).join('')}
 			</div>
-			<div class="abs lead" style="left:700px;top:660px;--d:1.5s" data-step="1">Content <b>and</b> capabilities — not verdicts.</div>`,
+			<div class="abs lead" style="left:700px;top:660px;--d:1.5s" data-step="1">Content <b>and</b> capabilities, not verdicts.</div>`,
 		hooks: { 1: (r) => { $('#d2a', r).style.transform = 'scale(.92) rotate(-2deg)'; } },
 	},
 	// ------------------------------------------------ 7 2B BUSINESS REQUIREMENT
@@ -306,7 +306,7 @@ const SCENES = [
 	// ------------------------------------------------ 8 2C AV vs CDR
 	{
 		module: 'DEEP CDR', title: '2C · AV vs CDR', stage: 1, steps: 2,
-		notes: { ask: '“AV says clean. Is the JavaScript still there?”', key: 'AV did not fail. Antivirus and CDR answer different questions.', flow: 'Key teaching moment — slow down.' },
+		notes: { ask: '“AV says clean. Is the JavaScript still there?”', key: 'AV did not fail. Antivirus and CDR answer different questions.', flow: 'Key teaching moment. Slow down.' },
 		html: `
 			<div class="abs" style="left:0;top:0;width:840px;bottom:120px" data-step="0" data-anim="left">
 				<div class="card" style="height:100%">
@@ -328,7 +328,7 @@ const SCENES = [
 	// ------------------------------------------------ 9 2D DISARM
 	{
 		module: 'DEEP CDR', title: '2D · Disarm', stage: 1, steps: 1,
-		notes: { key: 'Policy-driven removal of capability the document does not need. Not a malware verdict.', flow: 'Space = SANITIZE.' },
+		notes: { key: 'Policy-driven removal of capabilities the document does not need. Not a malware verdict.', flow: 'Space = SANITIZE.' },
 		html: `
 			<div class="abs" style="left:0;top:0" data-step="0"><div class="eyebrow">DEEP CDR · DISARM</div></div>
 			<div class="abs center" style="right:0;top:0" data-step="0" data-until="1"><div class="chip" style="font-size:40px;padding:20px 44px;border-color:var(--orange);color:var(--orange)">▶ SANITIZE</div></div>
@@ -356,7 +356,7 @@ const SCENES = [
 	// ------------------------------------------------ 10 2E RECONSTRUCT
 	{
 		module: 'DEEP CDR', title: '2E · Reconstruct', stage: 1, steps: 2,
-		notes: { key: 'The usable document is rebuilt: same business content, less capability.', flow: 'Space rebuilds, Space shows the result.' },
+		notes: { key: 'The usable document is rebuilt: same business content, less capability.', flow: 'Space rebuilds; Space again shows the result.' },
 		html: `
 			<div class="abs" style="left:0;right:0;top:0" data-step="0"><div class="flowline" id="fl"><span class="fx">ORIGINAL</span><span class="ar">→</span><span class="fx">DISARM</span><span class="ar">→</span><span class="fx">RECONSTRUCT</span><span class="ar">→</span><span class="fx">SANITIZED COPY</span></div></div>
 			<div class="abs center" style="left:180px;top:130px" data-step="0"><div class="label" style="margin-bottom:12px">ORIGINAL</div>
@@ -386,7 +386,7 @@ const SCENES = [
 	// ------------------------------------------------ 12 2G VERIFY
 	{
 		module: 'DEEP CDR', title: '2G · Verification', stage: (k) => (k >= 3 ? 2 : 1), steps: 3, lock: [1],
-		notes: { ask: '“It says sanitized. Do we trust the label?”', key: 'Verify the output. ANALYZE → SANITIZE → VERIFY — exactly what we do in the live demo.', flow: 'Step 3 moves the file to DLP.' },
+		notes: { ask: '“It says sanitized. Do we trust the label?”', key: 'Verify the output. ANALYZE → SANITIZE → VERIFY. This is exactly what we do in the live demo.', flow: 'Step 3 moves the file to DLP.' },
 		html: `
 			<div class="abs" style="left:0;top:20px" data-step="0">${fileCard('Sanitized copy', 'sm')}</div>
 			<div class="abs center" style="left:0;right:0;top:170px" data-step="0" data-until="1"><div class="question">TRUST THE “SANITIZED” LABEL?</div></div>
@@ -441,7 +441,7 @@ const SCENES = [
 		module: 'DLP', title: '3C · DLP result', stage: 2, steps: 2,
 		notes: { key: 'Both results are true at the same time. Different controls, different objectives.' },
 		html: `
-			<div class="abs center" style="left:0;right:0;top:0" data-step="0"><div class="label">DLP</div><div class="big" style="margin-top:6px"><span class="red">3</span> SENSITIVE OBJECTS DETECTED</div></div>
+			<div class="abs center" style="left:0;right:0;top:0" data-step="0"><div class="label">DLP</div><div class="big" style="margin-top:6px"><span class="red">3</span> SENSITIVE VALUES DETECTED</div></div>
 			<div class="abs row" style="left:0;right:0;top:220px;justify-content:center;gap:60px">
 				<div class="card" data-step="1" data-anim="left" style="width:760px;border-color:var(--green)"><div class="label">MALWARE CONTROL</div><div style="font-size:40px;font-weight:800;margin:14px 0">Is this content malicious?</div><span class="pill g" style="font-size:28px">NO THREAT DETECTED</span></div>
 				<div class="card" data-step="1" data-anim="right" style="width:760px;border-color:var(--red)"><div class="label">DLP CONTROL</div><div style="font-size:40px;font-weight:800;margin:14px 0">Does this content violate data policy?</div><span class="pill r" style="font-size:28px">POLICY ISSUE DETECTED</span></div>
@@ -451,7 +451,7 @@ const SCENES = [
 	// ------------------------------------------------ 16 3D POLICY
 	{
 		module: 'DLP', title: '3D · Policy changes the action', stage: 2, steps: 2, lock: [1], answer: { step: 1 },
-		notes: { ask: '“The policy allows it after approved redaction. What do we do?”', key: 'Policy decides the action: here SANITIZE / REDACT, keeping the useful content.' },
+		notes: { ask: '“The policy allows it after approved redaction. What do we do?”', key: 'Policy decides the action. Here, that is SANITIZE / REDACT, which keeps the useful content.' },
 		html: `
 			<div class="abs" style="left:0;top:0;width:900px" data-step="0"><div class="policy"><div class="ptag">RESEARCH DATA POLICY</div><div class="ptext">Sensitive values may cross this boundary only after approved redaction.</div></div></div>
 			<div class="abs" style="left:0;top:330px;width:940px" data-step="0"><div class="question sm">WHAT SHOULD WE DO?</div><div style="margin-top:30px;text-align:left">${choices(['ALLOW', 'BLOCK', 'SANITIZE / REDACT', 'IGNORE'], 'SANITIZE / REDACT')}</div></div>
@@ -476,7 +476,7 @@ const SCENES = [
 		html: `
 			<div class="abs center" style="left:0;right:0;top:40px" data-step="0"><div class="huge" style="font-size:100px;white-space:nowrap">MALWARE-CLEAN <span class="orange">≠</span> DATA-SAFE</div><div class="lead" style="margin-top:24px">Different controls protect against <b>different risks.</b></div></div>
 			<div class="abs row" style="left:0;right:0;top:380px;justify-content:center;gap:40px">
-				${[['MULTISCANNING', 'Threat evidence'], ['DEEP CDR', 'Active / embedded capability'], ['DLP', 'Sensitive data / policy']].map(([a, b], k) => `<div class="card center" data-step="1" data-anim="pop" style="width:500px;--d:${k * 0.2}s"><div style="font-size:40px;font-weight:900" class="cyan">${a}</div><div class="lead" style="margin-top:10px;color:var(--text)">${b}</div></div>`).join('')}
+				${[['MULTISCANNING', 'Threat evidence'], ['DEEP CDR', 'Active or embedded capability'], ['DLP', 'Sensitive data and policy']].map(([a, b], k) => `<div class="card center" data-step="1" data-anim="pop" style="width:500px;--d:${k * 0.2}s"><div style="font-size:40px;font-weight:900" class="cyan">${a}</div><div class="lead" style="margin-top:10px;color:var(--text)">${b}</div></div>`).join('')}
 			</div>
 			<div class="abs center" style="left:0;right:0;bottom:40px" data-step="2"><span class="chip" style="border-color:var(--cyan);color:var(--cyan)">FINAL CHECKPOINT → DECIDE</span></div>`,
 	},
@@ -497,12 +497,12 @@ const SCENES = [
 	// ------------------------------------------------ 19 4B THREE QUESTIONS
 	{
 		module: 'TRUST PIPELINE', title: '4B · Three controls, three questions', stage: 3, steps: 1,
-		notes: { key: 'Three controls, three different questions.' },
+		notes: { key: 'Each control answers a different question. Do not treat one answer as the whole decision.' },
 		html: `
 			<div class="abs row" style="left:0;right:0;top:20px;justify-content:center;gap:36px;align-items:stretch">
 				${[['MULTISCANNING', 'Do multiple detection perspectives see evidence of a threat?'], ['DEEP CDR', 'What capability can we safely remove while preserving the business content?'], ['DLP', 'Does the file contain data that policy restricts?']].map(([a, b], k) => `<div class="card" data-step="0" data-anim="pop" style="width:540px;--d:${k * 0.35}s"><div class="cyan" style="font-size:40px;font-weight:900">${a}</div><div style="font-size:38px;font-weight:700;margin-top:18px;line-height:1.3">${b}</div></div>`).join('')}
 			</div>
-			<div class="abs center" style="left:0;right:0;top:560px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line" style="font-size:50px">NONE OF THESE QUESTIONS MEANS THE SAME THING.</div></div>`,
+			<div class="abs center" style="left:0;right:0;top:560px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line" style="font-size:50px">THREE CONTROLS. THREE DIFFERENT QUESTIONS.</div></div>`,
 	},
 	// ------------------------------------------------ 20 4C FINAL QUESTION
 	{
@@ -515,7 +515,7 @@ const SCENES = [
 			<div class="abs" style="left:40px;top:120px" data-step="0">${fileCard('', 'sm')}
 				<div class="col" style="gap:14px;margin-top:24px">
 					<div class="card" style="padding:18px 24px"><div class="label">MULTISCAN</div><div style="font-size:30px;font-weight:800">Evidence collected</div></div>
-					<div class="card" style="padding:18px 24px;border-color:var(--green)"><div class="label">CDR</div><div style="font-size:30px;font-weight:800" class="green">Sanitized + verified</div></div>
+					<div class="card" style="padding:18px 24px;border-color:var(--green)"><div class="label">CDR</div><div style="font-size:30px;font-weight:800" class="green">Sanitized and verified</div></div>
 					<div class="card" style="padding:18px 24px;border-color:var(--green)"><div class="label">DLP</div><div style="font-size:30px;font-weight:800" class="green">Policy satisfied (redacted)</div></div>
 				</div>
 			</div>
