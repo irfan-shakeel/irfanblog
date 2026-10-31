@@ -451,10 +451,10 @@ const SCENES = [
 	// ------------------------------------------------ 16 3D POLICY
 	{
 		module: 'DLP', title: '3D · Policy changes the action', stage: 2, steps: 2, lock: [1], answer: { step: 1 },
-		notes: { ask: '“The policy allows it after approved redaction. What do we do?”', key: 'Policy decides the action. Here, that is SANITIZE / REDACT, which keeps the useful content.' },
+		notes: { ask: '“The policy allows it after approved redaction. What do we do?”', key: 'Policy decides the action. Here, that is REDACT, which keeps the useful content. Redaction masks data values; it is not the same as CDR sanitization of active content.' },
 		html: `
 			<div class="abs" style="left:0;top:0;width:900px" data-step="0"><div class="policy"><div class="ptag">RESEARCH DATA POLICY</div><div class="ptext">Sensitive values may cross this boundary only after approved redaction.</div></div></div>
-			<div class="abs" style="left:0;top:330px;width:940px" data-step="0"><div class="question sm">WHAT SHOULD WE DO?</div><div style="margin-top:30px;text-align:left">${choices(['ALLOW', 'BLOCK', 'SANITIZE / REDACT', 'IGNORE'], 'SANITIZE / REDACT')}</div></div>
+			<div class="abs" style="left:0;top:330px;width:940px" data-step="0"><div class="question sm">WHAT SHOULD WE DO?</div><div style="margin-top:30px;text-align:left">${choices(['ALLOW', 'BLOCK', 'REDACT', 'IGNORE'], 'REDACT')}</div></div>
 			<div class="abs card dlpdoc" style="left:1000px;right:0;top:0;height:620px;font-size:32px;padding:40px" data-step="0">
 				<div class="ln on">Research Access Roster</div><div class="ln on"> </div>
 				<div class="ln on">Employee:  Alex Example</div>
@@ -463,7 +463,7 @@ const SCENES = [
 				<div class="ln on">Card:      <span class="hl lit" data-r="**** **** **** 1111">4111 1111 1111 1111</span></div>
 				<div class="ln on">System IP: <span class="hl lit" data-r="192.0.2.***">192.0.2.25</span></div>
 			</div>
-			<div class="abs" style="left:0;top:640px;width:940px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line" style="font-size:54px">SANITIZE / <span class="cyan">REDACT</span></div><div class="lead" style="margin-top:14px;font-size:28px">Remove the sensitive values. <b>Keep the useful content.</b></div></div>
+			<div class="abs" style="left:0;top:640px;width:940px" data-step="1" data-anim="pop"><div class="reveal-box reveal-line" style="font-size:54px"><span class="cyan">REDACT</span></div><div class="lead" style="margin-top:14px;font-size:28px">Remove the sensitive values. <b>Keep the useful content.</b></div></div>
 			<div class="abs center label" style="left:1000px;right:0;top:650px;--d:2.2s" data-step="2"><span class="green">REDACTED COPY · BUSINESS CONTENT KEPT</span></div>`,
 		hooks: {
 			2: (r, a) => seq(3, 650, (k) => { const h = $$('.hl', r)[k]; h.textContent = h.dataset.r; h.classList.remove('lit'); h.classList.add('red'); }, a, 200),

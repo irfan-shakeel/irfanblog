@@ -133,7 +133,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 	let current: any = null;
 	let timer: any;
 
-	const fmtT = (iso: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+	const fmtT = (iso: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-');
 
 	async function boot() {
 		const r = await api('admin/login');
@@ -186,7 +186,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		$('people').innerHTML = list.length
 			? list
 					.map(
-						(p) => `<tr data-id="${p.id}" class="${p.is_hidden ? 'hid' : ''}"><td class="mono">${p.rank ?? '—'}</td><td>${esc(p.full_name)}</td><td class="mono sm">${esc(p.email)}</td><td class="mono"><b>${esc(p.handle)}</b>${p.is_hidden ? ' <span class="pill bad">hidden</span>' : ''}</td><td class="num mono">${p.score}</td><td class="num mono">${p.solved}/${CASEM.length}</td><td class="mono cases-cell">${CASEM.map((c) => { const v = p.cases?.[c.id]; return v === 'P' ? '<span class="cp">✓</span>' : v === 'F' ? '<span class="cf">✗</span>' : '<span class="cn">·</span>'; }).join('')}</td><td class="mono sm">${fmtT(p.last_solve_at)}</td><td class="mono sm">${fmtT(p.last_activity_at)}</td></tr>`
+						(p) => `<tr data-id="${p.id}" class="${p.is_hidden ? 'hid' : ''}"><td class="mono">${p.rank ?? '-'}</td><td>${esc(p.full_name)}</td><td class="mono sm">${esc(p.email)}</td><td class="mono"><b>${esc(p.handle)}</b>${p.is_hidden ? ' <span class="pill bad">hidden</span>' : ''}</td><td class="num mono">${p.score}</td><td class="num mono">${p.solved}/${CASEM.length}</td><td class="mono cases-cell">${CASEM.map((c) => { const v = p.cases?.[c.id]; return v === 'P' ? '<span class="cp">✓</span>' : v === 'F' ? '<span class="cf">✗</span>' : '<span class="cn">·</span>'; }).join('')}</td><td class="mono sm">${fmtT(p.last_solve_at)}</td><td class="mono sm">${fmtT(p.last_activity_at)}</td></tr>`
 					)
 					.join('')
 			: '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No participants yet.</td></tr>';
@@ -241,7 +241,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		if (!r.ok) return toast(r.error);
 		current = r;
 		const p = r.participant;
-		$('d-title').textContent = `${p.full_name} — ${p.handle}`;
+		$('d-title').textContent = `${p.full_name} · ${p.handle}`;
 		($('d-handle') as HTMLInputElement).value = p.handle;
 		$('d-hide').textContent = p.is_hidden ? 'Show on public leaderboard' : 'Hide from public leaderboard';
 		$('d-link').classList.add('hidden');
@@ -253,7 +253,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		const rows = CASEM.map((c) => {
 			const a = byCase[c.id];
 			const status = !a ? '<span class="pill">Not attempted</span>' : a.passed ? '<span class="pill ok">Passed</span>' : '<span class="pill bad">Failed</span>';
-			return `<tr><td class="mono">${c.num}</td><td>${esc(c.title)}</td><td>${status}</td><td class="num mono">${a ? a.points : 0} / ${c.points}</td><td class="ans">${a ? readable(c.id, a.answers) : '—'}</td><td class="mono sm">${a ? new Date(a.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</td></tr>`;
+			return `<tr><td class="mono">${c.num}</td><td>${esc(c.title)}</td><td>${status}</td><td class="num mono">${a ? a.points : 0} / ${c.points}</td><td class="ans">${a ? readable(c.id, a.answers) : '-'}</td><td class="mono sm">${a ? new Date(a.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}</td></tr>`;
 		}).join('');
 		$('d-body').innerHTML = `
 			<div class="dgrid">

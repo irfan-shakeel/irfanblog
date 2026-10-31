@@ -504,7 +504,7 @@ export const CHALLENGES = [
 					},
 					{
 						"id": "82c",
-						"text": "SANITIZE"
+						"text": "REDACT"
 					},
 					{
 						"id": "490",
@@ -520,7 +520,7 @@ export const CHALLENGES = [
 		"title": "THE FINAL BOUNDARY",
 		"points": 35,
 		"stage": "DECIDE",
-		"headline": "MESA CONTROLS — EMERGENCY UPDATE",
+		"headline": "MESA CONTROLS · EMERGENCY UPDATE",
 		"prompt": [
 			"Operations needs a vendor update inside the research environment within 30 minutes.",
 			"The vendor is trusted.",
