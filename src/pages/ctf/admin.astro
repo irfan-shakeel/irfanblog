@@ -45,6 +45,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 					<button class="btn" data-act="start">▶ Start challenge</button>
 					<button class="btn ghost sm" data-act="extend" data-min="1">+1 min</button>
 					<button class="btn ghost sm" data-act="extend" data-min="-1">−1 min</button>
+					<button class="btn ghost sm" data-act="stop">■ Stop challenge</button>
 				</div>
 				<div class="ctl">
 					<button class="btn warn" data-act="freeze">❄ Freeze leaderboard</button>
@@ -164,7 +165,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		state = r.state;
 		syncClock(state.serverNow);
 		const pills = [
-			state.started ? (state.isOpen ? ['ok', 'Submissions OPEN'] : ['bad', 'Submissions CLOSED']) : ['', 'Not started (closed)'],
+			state.started ? (state.isOpen && !state.timeUp ? ['ok', 'Submissions OPEN'] : ['bad', state.timeUp ? "TIME'S UP · Submissions CLOSED" : 'Submissions CLOSED']) : ['', 'Not started (closed)'],
 			state.frozen ? ['warn', 'Public board FROZEN'] : ['live', 'Public board live'],
 			state.final ? ['ok', 'Final results SHOWN'] : ['', 'Results hidden'],
 		];
@@ -212,6 +213,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 			}
 			if (a === 'extend') return act('extend', { minutes: b.dataset.min });
 			if (a === 'close' && !confirm('Close submissions now?')) return;
+			if (a === 'stop' && !confirm('Stop the challenge?\n\nThe timer stops, submissions close and the event goes back to "Not started".\nRegistrations and any final submissions are kept. Use "Reset scores" if you also want to clear submissions before starting again.')) return;
 			if (a === 'reveal' && !confirm('Reveal final results on the public leaderboard?')) return;
 			if (a === 'reset_scores' || a === 'reset_all') {
 				const msg = a === 'reset_all' ? 'This deletes ALL participants, submissions and scores.' : 'This deletes every final submission and score but keeps registrations. Students can then submit again.';
@@ -227,7 +229,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		if (!state) return;
 		const ms = state.started ? remainingMs(state.endsAt) : null;
 		$('clock').textContent = fmtClock(ms);
-		$('clock-sub').textContent = state.started ? `Started ${fmtT(state.startedAt)} · ends ${fmtT(state.endsAt)}${ms != null && ms <= 0 ? ' · TIME UP (close manually)' : ''}` : 'Not started';
+		$('clock-sub').textContent = state.started ? `Started ${fmtT(state.startedAt)} · ends ${fmtT(state.endsAt)}${ms != null && ms <= 0 ? ' · TIME UP · submissions closed automatically (+1 min reopens)' : ''}` : 'Not started';
 	}, 250);
 
 	// ----- participant detail -----

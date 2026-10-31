@@ -30,11 +30,17 @@ export const CHALLENGES = [
 				"href": "/ctf-v2/artifacts/mesa-maintenance-notice.pdf"
 			}
 		],
+		"evidenceButton": "VIEW LOCAL EVIDENCE",
 		"evidence": [
+			{
+				"kind": "image",
+				"title": "MetaDefender Cloud · Overview",
+				"src": "/ctf-v2/evidence/case-01/metadefender-overview.png"
+			},
 			{
 				"kind": "hex",
 				"button": "INSPECT RAW",
-				"title": "mesa-maintenance-notice.pdf",
+				"title": "Raw bytes · mesa-maintenance-notice.pdf",
 				"rows": [
 						{
 							"offset": "00000000",

@@ -1,4 +1,4 @@
-import { handle, readJson, json, err, nowIso, getParticipant, getState, validChallenge, normalizeAnswers, isCorrect, flagFor, POINTS, throttle, bumpVersion, refreshAggregates } from '../../../ctf-lib/server.js';
+import { handle, readJson, json, err, nowIso, getParticipant, getState, validChallenge, normalizeAnswers, isCorrect, flagFor, POINTS, throttle, bumpVersion, refreshAggregates, acceptingSubmissions, timeIsUp } from '../../../ctf-lib/server.js';
 import { TAKEAWAYS } from '../../../ctf-lib/server-content.js';
 
 // ONE final submission per participant per case.
@@ -22,7 +22,7 @@ export const onRequestPost = handle(async ({ request, env }) => {
 	const state = await getState(env);
 	await db.prepare('UPDATE participants SET last_activity_at = ? WHERE id = ?').bind(now, p.id).run();
 	if (!state.started_at) return err('The challenge has not started yet.', 403, { code: 'not_started' });
-	if (!state.is_open) return err('Submissions are closed.', 403, { code: 'closed' });
+	if (!acceptingSubmissions(state)) return err(timeIsUp(state) ? "Time's up. Submissions are closed." : 'Submissions are closed.', 403, { code: 'closed' });
 
 	const passed = isCorrect(env, challengeId, answers);
 	const points = passed ? POINTS[challengeId] : 0;
