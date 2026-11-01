@@ -19,14 +19,26 @@ export const onRequestPost = handle(async ({ request, env }) => {
 			const mins = Math.min(Math.max(parseInt(body.minutes, 10) || 1, -60), 60);
 			const s = await getState(env);
 			if (!s.ends_at) return err('Challenge has not started.');
-			await setState('ends_at = ?', new Date(Date.parse(s.ends_at) + mins * 60_000).toISOString());
+			// After 00:00, +N min means N more minutes from now (not from the old end time).
+			const base = mins > 0 ? Math.max(Date.parse(s.ends_at), Date.now()) : Date.parse(s.ends_at);
+			await setState('ends_at = ?', new Date(base + mins * 60_000).toISOString());
 			break;
 		}
 		case 'close':
 			await setState('is_open = 0');
 			break;
-		case 'reopen':
-			await setState('is_open = 1');
+		case 'reopen': {
+			// Reopening after the timer ran out also gives the room one more minute.
+			const s = await getState(env);
+			if (!s.started_at) return err('Challenge has not started.');
+			if (s.ends_at && Date.now() >= Date.parse(s.ends_at)) await setState('is_open = 1, ends_at = ?', new Date(Date.now() + 60_000).toISOString());
+			else await setState('is_open = 1');
+			break;
+		}
+		case 'stop':
+			// Back to "Not started": timer cleared, submissions closed, results hidden.
+			// Registrations and any final submissions are kept (Reset scores clears submissions).
+			await setState('is_open = 0, started_at = NULL, ends_at = NULL, leaderboard_frozen = 0, show_final_results = 0, frozen_snapshot = NULL');
 			break;
 		case 'freeze': {
 			const snap = await getBoard(env, await getState(env, { withBoard: true }), { force: true });

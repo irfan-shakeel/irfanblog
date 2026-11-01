@@ -25,14 +25,14 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 	<p class="rule mono">ONE FINAL SUBMISSION PER CASE</p>
 
 	<div id="banner-wait" class="alert info hidden"><b>Standing by.</b> The cases unlock when the instructor starts the challenge.</div>
-	<div id="banner-closed" class="alert bad hidden"><b>Submissions are closed.</b> Stay on this page for the final reveal.</div>
+	<div id="banner-closed" class="alert bad hidden timeup"><b id="closed-title">TIME'S UP.</b> <span id="closed-sub">Submissions are closed. Stay on this page while the instructor reveals the results.</span></div>
 	<div id="banner-noreg" class="alert bad hidden">You're not registered on this device. <a href="/ctf/register">Register here</a>.</div>
 
 	<section id="finish" class="card finish hidden">
 		<div class="big mono" id="finish-score">100 / 100</div>
 		<h2 id="finish-title">ALL FIVE CASES PASSED</h2>
 		<p class="lead" id="finish-lead">You made it through the trust boundary.</p>
-		<p class="muted">Stay on this page. Final rankings will be revealed shortly.</p>
+		<p class="muted" id="finish-wait">Stay on this page. Final rankings will be revealed shortly.</p>
 	</section>
 
 	<div class="cases">
@@ -183,6 +183,8 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 	let state: any = null;
 	const statusById: Record<string, any> = {};
 	let celebrated = false;
+	let allDone = false; // every case submitted
+	let localTimeUp = false; // this device's clock reached 00:00
 
 	const ss = {
 		get(k: string) { try { return sessionStorage.getItem(k); } catch { return null; } },
@@ -211,10 +213,24 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 		el.querySelectorAll('input').forEach((i) => ((i as HTMLInputElement).disabled = true));
 	}
 
+	const isTimeUp = () => !!(state?.started && (state.timeUp || localTimeUp));
+	const canSubmit = () => !!(state?.started && state?.isOpen && !isTimeUp());
+
 	function applyState() {
 		const started = state?.started;
+		const timeUp = isTimeUp();
 		$('banner-wait').classList.toggle('hidden', !!started);
-		$('banner-closed').classList.toggle('hidden', !started || state.isOpen);
+		$('closed-title').textContent = state?.final ? 'RESULTS ARE IN.' : timeUp ? "TIME'S UP." : 'SUBMISSIONS CLOSED.';
+		$('closed-sub').textContent = state?.final
+			? 'Check the projector for the final rankings.'
+			: 'No more submissions. Stay on this page while the instructor reveals the results.';
+		// Students who finished early see the finish card instead of the closed banner.
+		$('banner-closed').classList.toggle('hidden', !started || canSubmit() || allDone);
+		$('finish-wait').textContent = state?.final
+			? 'Final results are in. Check the projector for the rankings.'
+			: timeUp || (started && !state.isOpen)
+				? "Time's up. The instructor will reveal the final rankings shortly."
+				: 'Stay on this page. Final rankings are revealed when the time is up.';
 		CASES.forEach((c) => c.classList.toggle('locked', !started));
 		CASES.forEach((c) => updateGate(c));
 	}
@@ -223,6 +239,7 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 		$('score').textContent = String(score);
 		$('solved').textContent = String(passed);
 		const done = attempted >= TOTAL;
+		allDone = done;
 		$('finish').classList.toggle('hidden', !done);
 		if (!done) return;
 		const perfect = score === 100;
@@ -264,8 +281,7 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 	function viewedSet(id: string): Set<number> { try { return new Set(JSON.parse(ss.get(viewedKey(id)) || '[]')); } catch { return new Set(); } }
 	function updateGate(el: HTMLElement) {
 		const btn = el.querySelector('.qform .submit') as HTMLButtonElement;
-		const open = !!(state?.started && state?.isOpen);
-		let ok = open;
+		let ok = canSubmit();
 		if (el.dataset.stepper) {
 			const total = el.querySelectorAll('.ev').length;
 			const all = viewedSet(el.dataset.id!).size >= total;
@@ -391,6 +407,7 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 		statusById[id] = info;
 		renderOutcome(el, info);
 		updateScore(r.score, r.passedCount, r.attempted);
+		applyState();
 		toast(r.passed ? `FLAG CAPTURED ✓ +${r.points}` : 'Case closed.');
 		el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	});
@@ -398,8 +415,12 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 	setInterval(() => {
 		const ms = state?.started ? remainingMs(state.endsAt) : null;
 		const t = $('timer');
-		t.textContent = fmtClock(ms);
-		t.classList.toggle('low', ms != null && ms < 120000);
+		// Finished students: the countdown is the room's, not theirs.
+		t.textContent = allDone && state?.started ? 'DONE' : fmtClock(ms);
+		t.classList.toggle('done', allDone && !!state?.started);
+		t.classList.toggle('low', !allDone && ms != null && ms < 120000);
+		const up = ms != null && ms <= 0;
+		if (up !== localTimeUp) { localTimeUp = up; applyState(); }
 	}, 250);
 
 	refresh();
@@ -491,6 +512,9 @@ const hidden = (c: any) => !!(c.evidenceButton || c.evidence.some((e: any) => e.
 	.cap-flag { font-size: 16px; margin: 8px 0 4px; }
 	.cap-pts { color: var(--green); font-weight: 800; }
 	.cap-take { margin: 10px 0 0; font-style: italic; }
+	#timer.done { color: var(--green); }
+	.alert.timeup { font-size: 17px; padding: 16px 18px; }
+	.alert.timeup b { letter-spacing: 0.04em; }
 	.outcome.closed { border: 1px solid rgba(248, 113, 113, 0.5); background: var(--red-dim); }
 	.cl-title { font-weight: 900; letter-spacing: 0.12em; color: var(--red); font-size: 20px; }
 	.cl-sub { margin: 6px 0; font-weight: 700; }

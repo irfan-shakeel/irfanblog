@@ -25,7 +25,7 @@
 
 | # | Case | Points | Target time | Evidence |
 |---|---|---:|---:|---|
-| 01 | WHO ARE YOU REALLY? | 10 | 2 min | Downloadable suspect file + built-in raw byte view |
+| 01 | WHO ARE YOU REALLY? | 10 | 2 min | Downloadable suspect file + local evidence (MetaDefender Cloud overview screenshot + raw byte view) |
 | 02 | GREEN BUT BLIND | 15 | 3 min | Analysis record + import policy |
 | 03 | CLEAN, BUT CAPABLE | 20 | 4 min | Sample PDF, optional FileScan.IO, local evidence (real FileScan screenshots + PDF structure) + policy |
 | 04 | SAFE FOR WHICH OBJECTIVE? | 20 | 4 min | Downloadable synthetic export + scan report + data-transfer policy |
@@ -65,11 +65,16 @@ The answer key and flags live only in Cloudflare secrets. The instructor answer 
 - Students investigate independently. Clarify the wording of a question only.
 - Never confirm or deny whether an individual answer is right.
 
+**Timer rules**
+- At 00:00 submissions close automatically (the server allows a 10 s grace for a press already in flight). Students see TIME'S UP and the SUBMIT buttons disable.
+- **+1 min** after 00:00 gives one more minute from now and reopens submissions. **Reopen submissions** after 00:00 does the same.
+- **Stop challenge** stops the timer, closes submissions and returns to "Not started". Registrations and final submissions are kept; use **Reset scores** to clear submissions before starting again.
+
 **Final ~2 minutes**
 - **FREEZE LEADERBOARD**. Say: *"Leaderboard is frozen. Your submissions still count."*
 
 **Finish**
-1. At 00:00, click **CLOSE SUBMISSIONS**. The timer does not close them for you.
+1. At 00:00 submissions close automatically. Clicking **CLOSE SUBMISSIONS** is optional.
 2. Check the top 3 privately in the admin table (the ✓/✗ per case column, and click a row for answers).
 3. **REVEAL FINAL RESULTS**. Announce the winners.
 4. Debrief the correct reasoning for each case.
@@ -88,7 +93,7 @@ The answer key and flags live only in Cloudflare secrets. The instructor answer 
 | Student lost their session | Admin → student → **Generate re-entry link** (single use). Their locked or passed cases carry over. |
 | Inappropriate handle | Admin → student → **Rename handle** or **Hide from public leaderboard**. |
 | Need more time | Admin → **+1 min**. |
-| Started too early, before anyone submitted | **Reset scores (keep registrations)**, then **START** again. This clears every final submission. |
+| Need to stop or restart | **Stop challenge** (keeps registrations and submissions). To restart clean: **Stop challenge**, **Reset scores (keep registrations)**, then **START**. |
 
 ## D1 read budget (Cloudflare free tier: 5,000,000 rows read per day, whole account)
 
@@ -133,4 +138,5 @@ SCALE=1 node scripts/ctf-event-sim.mjs            # real time; SCALE=10 for a qu
 cp .dev.vars.example .dev.vars          # local secrets (gitignored)
 npm run ctf:dev                         # build + local D1 + wrangler pages dev on :8788
 npm run ctf:sim                         # 30-student simulation (FULL RESET of target)
+node scripts/ctf-timeup-sim.mjs         # auto-close, +1 min, reopen, stop tests (FULL RESET; refuses production)
 ```

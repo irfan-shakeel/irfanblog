@@ -249,9 +249,16 @@ export async function getState(env, { withBoard = false } = {}) {
 	await env.CTF_DB.prepare('INSERT OR IGNORE INTO event_state (id, updated_at) VALUES (1, ?)').bind(nowIso()).run();
 	return env.CTF_DB.prepare(`SELECT ${cols} FROM event_state WHERE id = 1`).first();
 }
+// Submissions close automatically at ends_at. A short grace covers a press already in flight
+// when the clock hits 00:00 (the student page disables SUBMIT at 00:00 by itself).
+export const SUBMIT_GRACE_MS = 10_000;
+export const timeIsUp = (s, now = Date.now()) => !!(s.started_at && s.ends_at && now > Date.parse(s.ends_at));
+export const acceptingSubmissions = (s, now = Date.now()) =>
+	!!(s.started_at && s.is_open && !(s.ends_at && now > Date.parse(s.ends_at) + SUBMIT_GRACE_MS));
 export function publicState(s) {
 	return {
-		isOpen: !!s.is_open,
+		isOpen: acceptingSubmissions(s),
+		timeUp: timeIsUp(s),
 		started: !!s.started_at,
 		startedAt: s.started_at,
 		endsAt: s.ends_at,

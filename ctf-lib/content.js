@@ -30,11 +30,17 @@ export const CHALLENGES = [
 				"href": "/ctf-v2/artifacts/mesa-maintenance-notice.pdf"
 			}
 		],
+		"evidenceButton": "VIEW LOCAL EVIDENCE",
 		"evidence": [
+			{
+				"kind": "image",
+				"title": "MetaDefender Cloud · Overview",
+				"src": "/ctf-v2/evidence/case-01/metadefender-overview.png"
+			},
 			{
 				"kind": "hex",
 				"button": "INSPECT RAW",
-				"title": "mesa-maintenance-notice.pdf",
+				"title": "Raw bytes · mesa-maintenance-notice.pdf",
 				"rows": [
 						{
 							"offset": "00000000",
@@ -498,7 +504,7 @@ export const CHALLENGES = [
 					},
 					{
 						"id": "82c",
-						"text": "SANITIZE"
+						"text": "REDACT"
 					},
 					{
 						"id": "490",
@@ -514,7 +520,7 @@ export const CHALLENGES = [
 		"title": "THE FINAL BOUNDARY",
 		"points": 35,
 		"stage": "DECIDE",
-		"headline": "MESA CONTROLS — EMERGENCY UPDATE",
+		"headline": "MESA CONTROLS · EMERGENCY UPDATE",
 		"prompt": [
 			"Operations needs a vendor update inside the research environment within 30 minutes.",
 			"The vendor is trusted.",

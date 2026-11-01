@@ -89,8 +89,14 @@ import CtfLayout from '../../layouts/CtfLayout.astro';
 		const L = board.leaders as any[];
 		// Podium for the final reveal
 		const pod = $('podium');
-		if (mode === 'final' && L.length) {
-			const order = [1, 0, 2].filter((i) => L[i]);
+		// Medals and the podium are earned: only analysts with points qualify.
+		const medal = (r: any) => r.rank <= 3 && r.score > 0;
+		const winners = L.slice(0, 3).filter((r) => r.score > 0).length;
+		if (mode === 'final' && L.length && !winners) {
+			pod.innerHTML = '<div class="no-winners"><div class="nw-title">NO FLAGS CAPTURED</div><div class="nw-sub">Nobody reached the podium this round.</div></div>';
+			pod.classList.remove('hidden');
+		} else if (mode === 'final' && winners) {
+			const order = [1, 0, 2].filter((i) => i < winners);
 			pod.innerHTML = order
 				.map((i) => `<div class="pd pd-${i + 1}"><div class="medal">${MEDAL[i]}</div><div class="pd-handle mono">${esc(L[i].handle)}</div><div class="pd-score mono">${L[i].score} pts · ${L[i].solved}/${board.stats.cases || 5}</div><div class="pd-block">${i + 1}</div></div>`)
 				.join('');
@@ -98,7 +104,7 @@ import CtfLayout from '../../layouts/CtfLayout.astro';
 		} else pod.classList.add('hidden');
 
 		$('rows').innerHTML = L.length
-			? L.map((r) => `<tr class="${r.rank <= 3 ? 'top top-' + r.rank : ''}"><td class="c-rank">${r.rank <= 3 ? MEDAL[r.rank - 1] : '<span class="mono">' + r.rank + '</span>'}</td><td class="handle mono">${esc(r.handle)}</td><td class="num mono score">${r.score}</td><td class="num mono">${r.solved}/${board.stats.cases || 5}</td></tr>`).join('')
+			? L.map((r) => `<tr class="${medal(r) ? 'top top-' + r.rank : ''}"><td class="c-rank">${medal(r) ? MEDAL[r.rank - 1] : '<span class="mono">' + r.rank + '</span>'}</td><td class="handle mono">${esc(r.handle)}</td><td class="num mono score">${r.score}</td><td class="num mono">${r.solved}/${board.stats.cases || 5}</td></tr>`).join('')
 			: '<tr><td colspan="4" class="empty">Waiting for analysts…</td></tr>';
 
 		$('m-analysts').textContent = board.stats.analysts;
@@ -184,6 +190,9 @@ import CtfLayout from '../../layouts/CtfLayout.astro';
 	.pd-2 .pd-block { height: 110px; background: var(--silver); }
 	.pd-3 .pd-block { height: 80px; background: var(--bronze); }
 	.pd-1 .pd-handle { color: var(--gold); }
+	.no-winners { text-align: center; padding: 24px 0 8px; }
+	.nw-title { font-size: clamp(34px, 4.4vw, 64px); font-weight: 900; color: var(--muted); letter-spacing: 0.04em; }
+	.nw-sub { font-size: clamp(18px, 1.6vw, 26px); color: var(--muted); margin-top: 6px; }
 	@media (max-width: 900px) {
 		.shell.wide { padding: 16px; }
 		.lb-grid { grid-template-columns: 1fr; }

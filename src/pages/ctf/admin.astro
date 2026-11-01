@@ -45,6 +45,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 					<button class="btn" data-act="start">▶ Start challenge</button>
 					<button class="btn ghost sm" data-act="extend" data-min="1">+1 min</button>
 					<button class="btn ghost sm" data-act="extend" data-min="-1">−1 min</button>
+					<button class="btn ghost sm" data-act="stop">■ Stop challenge</button>
 				</div>
 				<div class="ctl">
 					<button class="btn warn" data-act="freeze">❄ Freeze leaderboard</button>
@@ -132,7 +133,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 	let current: any = null;
 	let timer: any;
 
-	const fmtT = (iso: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+	const fmtT = (iso: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-');
 
 	async function boot() {
 		const r = await api('admin/login');
@@ -164,7 +165,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		state = r.state;
 		syncClock(state.serverNow);
 		const pills = [
-			state.started ? (state.isOpen ? ['ok', 'Submissions OPEN'] : ['bad', 'Submissions CLOSED']) : ['', 'Not started (closed)'],
+			state.started ? (state.isOpen && !state.timeUp ? ['ok', 'Submissions OPEN'] : ['bad', state.timeUp ? "TIME'S UP · Submissions CLOSED" : 'Submissions CLOSED']) : ['', 'Not started (closed)'],
 			state.frozen ? ['warn', 'Public board FROZEN'] : ['live', 'Public board live'],
 			state.final ? ['ok', 'Final results SHOWN'] : ['', 'Results hidden'],
 		];
@@ -185,7 +186,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		$('people').innerHTML = list.length
 			? list
 					.map(
-						(p) => `<tr data-id="${p.id}" class="${p.is_hidden ? 'hid' : ''}"><td class="mono">${p.rank ?? '—'}</td><td>${esc(p.full_name)}</td><td class="mono sm">${esc(p.email)}</td><td class="mono"><b>${esc(p.handle)}</b>${p.is_hidden ? ' <span class="pill bad">hidden</span>' : ''}</td><td class="num mono">${p.score}</td><td class="num mono">${p.solved}/${CASEM.length}</td><td class="mono cases-cell">${CASEM.map((c) => { const v = p.cases?.[c.id]; return v === 'P' ? '<span class="cp">✓</span>' : v === 'F' ? '<span class="cf">✗</span>' : '<span class="cn">·</span>'; }).join('')}</td><td class="mono sm">${fmtT(p.last_solve_at)}</td><td class="mono sm">${fmtT(p.last_activity_at)}</td></tr>`
+						(p) => `<tr data-id="${p.id}" class="${p.is_hidden ? 'hid' : ''}"><td class="mono">${p.rank ?? '-'}</td><td>${esc(p.full_name)}</td><td class="mono sm">${esc(p.email)}</td><td class="mono"><b>${esc(p.handle)}</b>${p.is_hidden ? ' <span class="pill bad">hidden</span>' : ''}</td><td class="num mono">${p.score}</td><td class="num mono">${p.solved}/${CASEM.length}</td><td class="mono cases-cell">${CASEM.map((c) => { const v = p.cases?.[c.id]; return v === 'P' ? '<span class="cp">✓</span>' : v === 'F' ? '<span class="cf">✗</span>' : '<span class="cn">·</span>'; }).join('')}</td><td class="mono sm">${fmtT(p.last_solve_at)}</td><td class="mono sm">${fmtT(p.last_activity_at)}</td></tr>`
 					)
 					.join('')
 			: '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No participants yet.</td></tr>';
@@ -212,6 +213,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 			}
 			if (a === 'extend') return act('extend', { minutes: b.dataset.min });
 			if (a === 'close' && !confirm('Close submissions now?')) return;
+			if (a === 'stop' && !confirm('Stop the challenge?\n\nThe timer stops, submissions close and the event goes back to "Not started".\nRegistrations and any final submissions are kept. Use "Reset scores" if you also want to clear submissions before starting again.')) return;
 			if (a === 'reveal' && !confirm('Reveal final results on the public leaderboard?')) return;
 			if (a === 'reset_scores' || a === 'reset_all') {
 				const msg = a === 'reset_all' ? 'This deletes ALL participants, submissions and scores.' : 'This deletes every final submission and score but keeps registrations. Students can then submit again.';
@@ -227,7 +229,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		if (!state) return;
 		const ms = state.started ? remainingMs(state.endsAt) : null;
 		$('clock').textContent = fmtClock(ms);
-		$('clock-sub').textContent = state.started ? `Started ${fmtT(state.startedAt)} · ends ${fmtT(state.endsAt)}${ms != null && ms <= 0 ? ' · TIME UP (close manually)' : ''}` : 'Not started';
+		$('clock-sub').textContent = state.started ? `Started ${fmtT(state.startedAt)} · ends ${fmtT(state.endsAt)}${ms != null && ms <= 0 ? ' · TIME UP · submissions closed automatically (+1 min reopens)' : ''}` : 'Not started';
 	}, 250);
 
 	// ----- participant detail -----
@@ -239,7 +241,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		if (!r.ok) return toast(r.error);
 		current = r;
 		const p = r.participant;
-		$('d-title').textContent = `${p.full_name} — ${p.handle}`;
+		$('d-title').textContent = `${p.full_name} · ${p.handle}`;
 		($('d-handle') as HTMLInputElement).value = p.handle;
 		$('d-hide').textContent = p.is_hidden ? 'Show on public leaderboard' : 'Hide from public leaderboard';
 		$('d-link').classList.add('hidden');
@@ -251,7 +253,7 @@ for (const c of CHALLENGES as any[]) for (const q of c.questions) for (const o o
 		const rows = CASEM.map((c) => {
 			const a = byCase[c.id];
 			const status = !a ? '<span class="pill">Not attempted</span>' : a.passed ? '<span class="pill ok">Passed</span>' : '<span class="pill bad">Failed</span>';
-			return `<tr><td class="mono">${c.num}</td><td>${esc(c.title)}</td><td>${status}</td><td class="num mono">${a ? a.points : 0} / ${c.points}</td><td class="ans">${a ? readable(c.id, a.answers) : '—'}</td><td class="mono sm">${a ? new Date(a.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</td></tr>`;
+			return `<tr><td class="mono">${c.num}</td><td>${esc(c.title)}</td><td>${status}</td><td class="num mono">${a ? a.points : 0} / ${c.points}</td><td class="ans">${a ? readable(c.id, a.answers) : '-'}</td><td class="mono sm">${a ? new Date(a.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}</td></tr>`;
 		}).join('');
 		$('d-body').innerHTML = `
 			<div class="dgrid">
